@@ -490,7 +490,7 @@ const Attendance = () => {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: urlEncodedData,
-        mode: "no-cors",
+        // mode: "no-cors",
       });
 
       showToast(`Your ${formData.status} has been recorded successfully!`);
