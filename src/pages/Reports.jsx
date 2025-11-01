@@ -1,10 +1,10 @@
-
 "use client";
 
 import { useState, useEffect, useContext } from "react"; // Import useContext
 import { toast, Toaster } from "react-hot-toast";
 import { Download, Filter, Search } from "lucide-react";
 import { AuthContext } from "../App"; // Assuming AuthContext is defined in App.js or a similar path
+import supabase from "../SupaabseClient";
 
 const Reports = () => {
   const [indents, setIndents] = useState([]);
@@ -26,13 +26,25 @@ const Reports = () => {
   const [error, setError] = useState(null);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
-  const SPREADSHEET_ID = "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk";
-  
   // DISPLAY_COLUMNS:
   // Order: Sales Person (E), Dealer Name (F), Dealer Size (H), Last Action (V),
   // then Last Order Before (AA), Last Call Before (AB), MTD (AC), YTD (AD), Pending Amount (AE), No Of Bills (AF), Status (AG)
   const DISPLAY_COLUMNS = [4, 5, 8, 21, 26, 27, 28, 29, 30, 31, 32];
-  const SHEET_NAME = "FMS"; // Explicitly set the sheet name to FMS as per your request
+
+  // Column mapping constant
+  const COLUMN_MAPPING = {
+    'sales_person_name': 'col4',
+    'dealer_name': 'col5', 
+    'dealer_size': 'col8',
+    'last_date_of_call': 'col21',
+    'last_order_before': 'col26',
+    'last_call_before': 'col27',
+    'mtd': 'col28',
+    'ytd': 'col29',
+    'pending_amount': 'col30',
+    'no_of_bills': 'col31',
+    'status': 'col32'
+  };
 
   // Function to format date values to DD/MM/YYYY
   const formatDate = (value) => {
@@ -125,7 +137,7 @@ const Reports = () => {
     return value || "—";
   };
 
-  // Function to fetch data only from FMS sheet
+  // Function to fetch data from Supabase FMS table
   const fetchFMSData = async () => {
     try {
       setIsLoading(true);
@@ -137,93 +149,95 @@ const Reports = () => {
         return;
       }
 
-      console.log(`🔄 Fetching data from ${SHEET_NAME} sheet...`);
+      console.log("🔄 Fetching data from Supabase FMS table...");
 
-      const response = await fetch(
-        `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`
-      );
+      // Query the FMS table with only the columns you need
+      const { data, error } = await supabase
+        .from('FMS')
+        .select(`
+          id,
+          timestamp,
+          sales_person_name,
+          dealer_name,
+          dealer_size,
+          last_date_of_call,
+          next_date_of_call,
+          last_order_before,
+          last_call_before,
+          mtd,
+          ytd,
+          pending_amount,
+          no_of_bills,
+          status,
+          status2,
+          order_qty,
+          value_of_order,
+          contact_number,
+          email_address
+        `)
+        .order('timestamp', { ascending: false });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch ${SHEET_NAME} data: ${response.status}`);
+      if (error) {
+        throw new Error(`Supabase error: ${error.message}`);
       }
 
-      const text = await response.text();
-      const jsonStart = text.indexOf("{");
-      const jsonEnd = text.lastIndexOf("}");
+      console.log("✅ FMS data loaded successfully from Supabase");
 
-      if (jsonStart === -1 || jsonEnd === -1) {
-        throw new Error(`Invalid response format from ${SHEET_NAME} sheet`);
-      }
-
-      const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
-
-      if (!data.table || !data.table.rows) {
-        throw new Error(`No table data found in ${SHEET_NAME} sheet`);
-      }
-
-      console.log(`✅ ${SHEET_NAME} data loaded successfully`);
-
-      // Process FMS headers
-      const fmsHeaders = [];
-      const columnMapping = {
-        4: "Sales Person Name",   // Column E
-        5: "Dealer Name",         // Column F
-        7: "Dealer Size",         // Column H
-        21: "Last Action",        // Column V (originally "Next Action")
-        26: "Last Order Before",  // Column AA
-        27: "Last Call Before",   // Column AB
-        28: "MTD",                // Column AC
-        29: "YTD",                // Column AD
-        30: "Pending Amount",     // Column AE
-        31: "No Of Bills",        // Column AF
-        32: "Status"              // Column AG
-      };
-
-      if (data.table.cols) {
-        data.table.cols.forEach((col, index) => {
-          if (DISPLAY_COLUMNS.includes(index)) {
-            const label = columnMapping[index] || col.label || `Column ${index}`;
-            fmsHeaders.push({ id: `col${index}`, label });
-          }
-        });
-      }
-
-      // Sort headers based on DISPLAY_COLUMNS order to ensure correct display order
-      fmsHeaders.sort((a, b) => DISPLAY_COLUMNS.indexOf(parseInt(a.id.replace('col', ''))) - DISPLAY_COLUMNS.indexOf(parseInt(b.id.replace('col', ''))));
+      // Set headers for display
+      const fmsHeaders = [
+        { id: 'sales_person_name', label: 'Sales Person Name' },
+        { id: 'dealer_name', label: 'Dealer Name' },
+        { id: 'dealer_size', label: 'Dealer Size' },
+        { id: 'last_date_of_call', label: 'Last Action' },
+        { id: 'last_order_before', label: 'Last Order Before' },
+        { id: 'last_call_before', label: 'Last Call Before' },
+        { id: 'mtd', label: 'MTD' },
+        { id: 'ytd', label: 'YTD' },
+        { id: 'pending_amount', label: 'Pending Amount' },
+        { id: 'no_of_bills', label: 'No Of Bills' },
+        { id: 'status', label: 'Status' }
+      ];
 
       setSheetHeaders(fmsHeaders);
 
-      // Process FMS data rows
-      const fmsItems = data.table.rows.map((row, rowIndex) => {
+      // Get all column keys for filtering
+      const displayColumnKeys = Object.values(COLUMN_MAPPING);
+
+      // Process Supabase data to match your component structure
+      const fmsItems = data.map((item, index) => {
         const itemObj = {
-          _id: `${rowIndex}-${Math.random().toString(36).substr(2, 9)}`,
-          _rowIndex: rowIndex + 1,
+          _id: item.id || `${index}-${Math.random().toString(36).substr(2, 9)}`,
+          _rowIndex: index + 1,
         };
 
-        if (row.c) {
-          row.c.forEach((cell, i) => {
-            const rawValue = cell?.v ?? cell?.f ?? "";
-            itemObj[`col${i}`] = rawValue;
-            itemObj[`col${i}_formatted`] = formatCellValue(rawValue, fmsHeaders.find(h => h.id === `col${i}`)?.label);
-          });
-        }
+        // Populate both raw and formatted values
+        fmsHeaders.forEach(header => {
+          const rawValue = item[header.id];
+          const colKey = COLUMN_MAPPING[header.id];
+          
+          if (colKey) {
+            itemObj[colKey] = rawValue;
+            itemObj[`${colKey}_formatted`] = formatCellValue(rawValue, header.label);
+          }
+        });
 
         return itemObj;
       });
 
-      // Filter out empty rows (rows where none of the DISPLAY_COLUMNS have content)
+      // Filter out empty rows using the displayColumnKeys
       const cleanedItems = fmsItems.filter((item) => {
-        return DISPLAY_COLUMNS.some((colIndex) => {
-          const value = item[`col${colIndex}`];
-          return value && String(value).trim() !== "";
+        return displayColumnKeys.some(colKey => {
+          const value = item[colKey];
+          return value !== null && value !== undefined && String(value).trim() !== "";
         });
       });
 
-      setIndents(cleanedItems); // Store all relevant data initially
+      setIndents(cleanedItems);
+
     } catch (err) {
-      console.error(`❌ Error fetching ${SHEET_NAME} data:`, err);
+      console.error("❌ Error fetching FMS data from Supabase:", err);
       setError(err.message);
-      toast.error(`Failed to load ${SHEET_NAME} data: ${err.message}`, {
+      toast.error(`Failed to load FMS data: ${err.message}`, {
         duration: 4000,
         position: "top-right",
       });
@@ -289,8 +303,8 @@ const Reports = () => {
         ...filteredIndents.map((item) => // Use filteredIndents for export as well
           sheetHeaders
             .map((header) => {
-              const rawValue = item[header.id];
-              const formattedValue = formatCellValue(rawValue, header.label);
+              const colKey = COLUMN_MAPPING[header.id];
+              const formattedValue = item[`${colKey}_formatted`] || "—";
 
               // Escape commas and quotes in CSV
               return typeof formattedValue === "string" &&
@@ -546,8 +560,9 @@ const Reports = () => {
                           className="hover:bg-slate-50 transition-colors duration-150"
                         >
                           {sheetHeaders.map((header) => {
-                            // Use the formatted value for display in the table
-                            const formattedValue = item[`${header.id}_formatted`];
+                            // Map the header back to the column key for data access
+                            const colKey = COLUMN_MAPPING[header.id];
+                            const formattedValue = item[`${colKey}_formatted`] || "—";
 
                             return (
                               <td

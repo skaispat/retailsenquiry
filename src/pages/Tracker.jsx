@@ -1,25 +1,36 @@
 "use client";
 
-import { useState, useEffect, useContext } from "react"; // Import useContext
+import { useState, useEffect, useContext } from "react";
 import { toast, Toaster } from "react-hot-toast";
-
-import { DownloadIcon, RefreshCw, SearchIcon, Eye } from "lucide-react";
+import { DownloadIcon, RefreshCw, SearchIcon, Eye, ChevronDown, ChevronUp } from "lucide-react";
 import TrackerDialog from "../components/TrackerDialog";
-import { AuthContext } from "../App"; // Assuming AuthContext is defined in App.js or a similar path
+import { AuthContext } from "../App";
+import supabase from "../SupaabseClient";
 
 const Tracker = () => {
   const [indents, setIndents] = useState([]);
   const [masterSheetData, setMasterSheetData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [col2Filter, setCol2Filter] = useState(""); // Likely for 'Dealer Code' or similar
-  const [col4Filter, setCol4Filter] = useState(""); // Likely for 'Sales Person Name' or similar
+  const [col2Filter, setCol2Filter] = useState("");
+  const [col4Filter, setCol4Filter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [sheetHeaders, setSheetHeaders] = useState([
+  const [expandedCards, setExpandedCards] = useState(new Set());
+  
+  // Get user authentication context
+  const { currentUser, isAuthenticated } = useContext(AuthContext);
+
+  // Extract salesPersonName and userRole from currentUser
+  const currentUserSalesPersonName = currentUser?.salesPersonName || "Unknown User";
+  const userRole = currentUser?.role || "User";
+  const isAdmin = userRole.toLowerCase() === "admin";
+
+  // Base headers without the admin-only column
+  const baseHeaders = [
     { id: "col5", label: "Dealer Name" },
     { id: "col3", label: "District Name" },
     { id: "col2", label: "State Name" },
+    { id: "area_name", label: "Area Name" }, // New Area Name column
     { id: "col4", label: "Sales Person Name" },
-
     { id: "col1", label: "Dealer Code" },
     { id: "col6", label: "About Dealer" },
     { id: "col7", label: "Address" },
@@ -29,171 +40,181 @@ const Tracker = () => {
     { id: "col11", label: "Email Address" },
     { id: "col12", label: "Date Of Birth" },
     { id: "col13", label: "Anniversary" },
-  ]);
+  ];
 
-  // console.log("sheetHeaders", sheetHeaders);
+  // Admin-only header
+  const adminOnlyHeader = { id: "select_value", label: "Selected Type" };
+
+  // Dynamic headers based on user role
+  const [sheetHeaders, setSheetHeaders] = useState(baseHeaders);
+
   const [error, setError] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedIndent, setSelectedIndent] = useState(null);
 
-  // Get user authentication context
-  const { currentUser, isAuthenticated } = useContext(AuthContext);
-
-  // Extract salesPersonName and userRole from currentUser
-  const currentUserSalesPersonName =
-    currentUser?.salesPersonName || "Unknown User";
-  const userRole = currentUser?.role || "User"; // Default to "User" if role is not defined
-
   const SPREADSHEET_ID = "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk";
 
-  const COLUMN_START_INDEX = 1; // Column B (0-indexed = 1)
-  const COLUMN_END_INDEX = 13; // Column N (0-indexed = 13)
-  const SALES_PERSON_COLUMN_INDEX = 4; // Column E (0-indexed = 4) for Sales Person Name
+  /**
+   * Map Supabase column names to the expected format
+   */
+  const mapSupabaseToLegacyFormat = (supabaseData) => {
+    return supabaseData.map((item, index) => {
+      // Map Supabase columns to the legacy column format
+      return {
+        _id: item.id || `${index}-${Math.random().toString(36).substr(2, 9)}`,
+        _rowIndex: index + 1,
+        // Map Supabase columns to legacy column format
+        col1: item.dc_dealer_code || "", // Dealer Code
+        col2: item.state_name || "", // State Name
+        col3: item.district_name || "", // District Name
+        area_name: item.area_name || "", // Area Name - New field
+        col4: item.sales_person_name || "", // Sales Person Name
+        col5: item.dealer_name || "", // Dealer Name
+        col6: item.about_dealer || "", // About Dealer
+        col7: item.address || "", // Address
+        col8: item.dealer_size || "", // Dealer Size
+        col9: item.avg_qty || "", // Avg Qty
+        col10: item.contact_number || "", // Contact Number
+        col11: item.email_address || "", // Email Address
+        col12: item.date_of_birth || "", // Date Of Birth
+        col13: item.anniversary || "", // Anniversary
+        col14: item.planned || "", // Planned (Column O equivalent)
+        col15: item.actual || "", // Actual (Column P equivalent)
+        col17: item.last_call_date || "", // Last Call Date
+        // Add select_value and image_url
+        select_value: item.select_value || null,
+        image_url: item.image_url || null,
+        // Keep original Supabase data for reference
+        supabase_data: item
+      };
+    });
+  };
 
-  // Helper function to format dates - MOVED HERE FOR USE IN TRACKER TABLE
-  const formatDateToDDMMYYYY = (dateString) => {
-    if (!dateString) return "N/A";
-
-    let date;
-    // Regex to match "Date(YYYY,MM,DD,HH,MM,SS)" or "Date(YYYY,MM,DD)"
-    const dateMatch = dateString.match(
-      /^Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,(\d{1,2}),(\d{1,2}),(\d{1,2}))?\)$/
-    );
-
-    if (dateMatch) {
-      const year = parseInt(dateMatch[1], 10);
-      const month = parseInt(dateMatch[2], 10); // Month from GS is already 0-indexed
-      const day = parseInt(dateMatch[3], 10);
-      const hours = dateMatch[4] ? parseInt(dateMatch[4], 10) : 0;
-      const minutes = dateMatch[5] ? parseInt(dateMatch[5], 10) : 0;
-      const seconds = dateMatch[6] ? parseInt(dateMatch[6], 10) : 0;
-
-      date = new Date(year, month, day, hours, minutes, seconds);
+  /**
+   * Update headers based on user role
+   */
+  useEffect(() => {
+    if (isAdmin) {
+      setSheetHeaders([...baseHeaders, adminOnlyHeader]);
     } else {
-      date = new Date(dateString);
+      setSheetHeaders(baseHeaders);
     }
+  }, [isAdmin]);
 
-    if (isNaN(date.getTime())) {
-      console.error("Invalid Date object after parsing:", dateString);
-      return "N/A";
+  /**
+   * Fetch FMS data from Supabase
+   */
+  const fetchFMSDataFromSupabase = async () => {
+    try {
+      console.log("🔄 Fetching FMS data from Supabase...");
+      
+      let query = supabase
+        .from('FMS')
+        .select('*')
+        .order('timestamp', { ascending: false });
+
+      // Apply role-based filtering
+      if (!isAdmin) {
+        query = query.eq('sales_person_name', currentUserSalesPersonName);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Supabase error: ${error.message}`);
+      }
+
+      console.log("✅ FMS data fetched from Supabase:", data);
+      return data || [];
+    } catch (error) {
+      console.error("❌ Error fetching FMS data from Supabase:", error);
+      throw error;
     }
-
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0"); // Add 1 for 1-indexed display
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
   };
 
-  const fetchSheetData = async (sheetName) => {
-    console.log(`🔄 Fetching data from ${sheetName} sheet...`);
-    const response = await fetch(
-      `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${sheetName}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch ${sheetName} data: ${response.status}`);
-    }
-
-    const text = await response.text();
-    const jsonStart = text.indexOf("{");
-    const jsonEnd = text.lastIndexOf("}");
-
-    if (jsonStart === -1 || jsonEnd === -1) {
-      throw new Error(
-        `Invalid response format from ${sheetName} sheet. Could not find JSON boundaries.`
+  /**
+   * Fetch master data from Google Sheets (keeping this for now)
+   */
+  const fetchMasterDataFromSheets = async () => {
+    try {
+      console.log("🔄 Fetching master data from Google Sheets...");
+      const response = await fetch(
+        `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Master`
       );
-    }
 
-    const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Master data: ${response.status}`);
+      }
 
-    if (!data.table || !data.table.rows) {
-      throw new Error(`No table data found in ${sheetName} sheet`);
+      const text = await response.text();
+      const jsonStart = text.indexOf("{");
+      const jsonEnd = text.lastIndexOf("}");
+
+      if (jsonStart === -1 || jsonEnd === -1) {
+        throw new Error("Invalid response format from Master sheet");
+      }
+
+      const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+
+      if (!data.table || !data.table.rows) {
+        throw new Error("No table data found in Master sheet");
+      }
+
+      console.log("✅ Master data loaded successfully");
+      return data;
+    } catch (error) {
+      console.error("❌ Error fetching master data:", error);
+      throw error;
     }
-    console.log(`✅ ${sheetName} data loaded successfully`);
-    return data;
   };
 
+  /**
+   * Process master data rows
+   */
+  const processMasterRows = (dataRows) => {
+    return dataRows.map((row, rowIndex) => {
+      const itemObj = {
+        _id: `${rowIndex}-${Math.random().toString(36).substr(2, 9)}`,
+        _rowIndex: rowIndex + 1,
+      };
+      if (row.c) {
+        row.c.forEach((cell, i) => {
+          itemObj[`col${i}`] = cell?.v ?? cell?.f ?? "";
+        });
+      }
+      return itemObj;
+    });
+  };
+
+  /**
+   * Main data fetching function
+   */
   const fetchTrackerData = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // --- ADDED AUTH CHECK ---
+      // Check authentication
       if (!isAuthenticated || !currentUser) {
-        console.log(
-          "Not authenticated or currentUser not available. Skipping data fetch."
-        );
+        console.log("Not authenticated. Skipping data fetch.");
         setIsLoading(false);
         return;
       }
-      // --- END ADDED AUTH CHECK ---
 
+      // Fetch data from both sources
       const [fmsData, masterData] = await Promise.all([
-        fetchSheetData("FMS"),
-        fetchSheetData("Master"),
+        fetchFMSDataFromSupabase(),
+        fetchMasterDataFromSheets(),
       ]);
 
-      const newHeaders = [];
-      const currentColumnsToDisplay = [];
-      for (let i = COLUMN_START_INDEX; i <= COLUMN_END_INDEX; i++) {
-        currentColumnsToDisplay.push(i);
-      }
-
-      if (fmsData.table.cols) {
-        fmsData.table.cols.forEach((col, index) => {
-          // Only add headers for the columns B to N
-          if (currentColumnsToDisplay.includes(index)) {
-            let label =
-              col.label || `Column ${String.fromCharCode(65 + index)}`;
-
-            console.log("label", label);
-
-            if (index === 1 && label.includes("Dealer's Details")) {
-              label = "Dealer Code"; // Override the problematic label for col1
-            }
-            newHeaders.push({ id: `col${index}`, label });
-          }
-        });
-      }
-      // console.log("newHeaders", newHeaders);
-      // setSheetHeaders(newHeaders);
-      // console.log("Generated Sheet Headers:", newHeaders);
-
-      const processRows = (dataRows) => {
-        return dataRows.map((row, rowIndex) => {
-          const itemObj = {
-            _id: `${rowIndex}-${Math.random().toString(36).substr(2, 9)}`,
-            _rowIndex: rowIndex + 1,
-          };
-          if (row.c) {
-            row.c.forEach((cell, i) => {
-              // Extract all necessary columns, even if not displayed, for filtering/dialog
-              // Ensure col14 (O), col15 (P), col17 (Q - Last Call Date), and Sales Person Column (E=col4) are included
-              if (
-                currentColumnsToDisplay.includes(i) ||
-                i === 14 ||
-                i === 15 ||
-                i === 17 ||
-                i === SALES_PERSON_COLUMN_INDEX
-              ) {
-                itemObj[`col${i}`] = cell?.v ?? cell?.f ?? "";
-              }
-            });
-          }
-          return itemObj;
-        });
-      };
-
-      const fmsItems = processRows(fmsData.table.rows);
-      console.log(
-        "Raw FMS Items (after processRows, before further filtering):",
-        fmsItems
-      );
+      // Process FMS data from Supabase
+      const processedFMSData = mapSupabaseToLegacyFormat(fmsData);
+      console.log("Processed FMS Data:", processedFMSData);
 
       // Apply initial filters: Column O not empty AND Column P is empty
-      let filteredFMSItems = fmsItems.filter((item) => {
-        const colO = item.col14; // Column O is index 14 (0-based)
-        const colP = item.col15; // Column P is index 15 (0-based)
+      let filteredFMSItems = processedFMSData.filter((item) => {
+        const colO = item.col14; // Planned column
+        const colP = item.col15; // Actual column
 
         const isColONotEmpty = colO && String(colO).trim() !== "";
         const isColPEmpty = !colP || String(colP).trim() === "";
@@ -203,8 +224,8 @@ const Tracker = () => {
           return false;
         }
 
-        // Second, ensure at least one of the *displayed* columns has content
-        const hasContentInDisplayedColumns = currentColumnsToDisplay.some(
+        // Second, ensure at least one of the displayed columns has content
+        const hasContentInDisplayedColumns = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].some(
           (colIndex) => {
             const value = item[`col${colIndex}`];
             return value && String(value).trim() !== "";
@@ -214,30 +235,21 @@ const Tracker = () => {
         return hasContentInDisplayedColumns;
       });
 
-      // --- ADDED ROLE-BASED FILTERING ---
-      if (userRole.toLowerCase() !== "admin") {
+      // Apply role-based filtering (already done in Supabase query, but double-check)
+      if (!isAdmin) {
         filteredFMSItems = filteredFMSItems.filter((item) => {
-          const salesPersonInRow = String(
-            item[`col${SALES_PERSON_COLUMN_INDEX}`] || ""
-          ).toLowerCase();
+          const salesPersonInRow = String(item.col4 || "").toLowerCase();
           return salesPersonInRow === currentUserSalesPersonName.toLowerCase();
         });
-      } else {
-        // toast.success(`Showing all ${filteredFMSItems.length} records (Admin View)`, {
-        //   duration: 3000,
-        //   position: "top-right",
-        // });
       }
-      // --- END ADDED ROLE-BASED FILTERING ---
 
+      console.log("Final Filtered FMS Items:", filteredFMSItems);
       setIndents(filteredFMSItems);
-      console.log(
-        "Final Filtered FMS Items (to be displayed):",
-        filteredFMSItems
-      );
 
-      const masterItems = processRows(masterData.table.rows);
+      // Process master data
+      const masterItems = processMasterRows(masterData.table.rows);
       setMasterSheetData(masterItems);
+
     } catch (err) {
       console.error("❌ Error fetching data:", err);
       setError(err.message);
@@ -250,23 +262,60 @@ const Tracker = () => {
     }
   };
 
+  // Helper function to format dates
+  const formatDateToDDMMYYYY = (dateString) => {
+    if (!dateString) return "N/A";
+
+    let date;
+    
+    // Check if it's a Supabase timestamp
+    if (typeof dateString === 'string' && dateString.includes('T')) {
+      date = new Date(dateString);
+    } 
+    // Check if it's the legacy Google Sheets Date format
+    else if (typeof dateString === 'string' && dateString.startsWith('Date(')) {
+      const dateMatch = dateString.match(
+        /^Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,(\d{1,2}),(\d{1,2}),(\d{1,2}))?\)$/
+      );
+      if (dateMatch) {
+        const year = parseInt(dateMatch[1], 10);
+        const month = parseInt(dateMatch[2], 10);
+        const day = parseInt(dateMatch[3], 10);
+        const hours = dateMatch[4] ? parseInt(dateMatch[4], 10) : 0;
+        const minutes = dateMatch[5] ? parseInt(dateMatch[5], 10) : 0;
+        const seconds = dateMatch[6] ? parseInt(dateMatch[6], 10) : 0;
+        date = new Date(year, month, day, hours, minutes, seconds);
+      } else {
+        date = new Date(dateString);
+      }
+    } else {
+      date = new Date(dateString);
+    }
+
+    if (isNaN(date.getTime())) {
+      console.error("Invalid Date object after parsing:", dateString);
+      return "N/A";
+    }
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
   useEffect(() => {
-    // Only fetch data if authenticated and current user data is available
     if (isAuthenticated && currentUser) {
       fetchTrackerData();
     } else if (!isAuthenticated) {
-      // If not authenticated, stop loading and show a message
       setIsLoading(false);
-      setError("Please log in to view this data."); // Specific message for Tracker
+      setError("Please log in to view this data.");
     }
-  }, [isAuthenticated, currentUser, userRole, currentUserSalesPersonName]); // Depend on auth status and user details
+  }, [isAuthenticated, currentUser, isAdmin, currentUserSalesPersonName]);
 
   const filteredIndents = indents.filter((item) => {
     const term = searchTerm.toLowerCase();
-
-    // These filters were already present for col2 and col4
     const col2Val = String(item.col2 || "").toLowerCase();
-    const col4Val = String(item.col4 || "").toLowerCase(); // col4 is Sales Person Name
+    const col4Val = String(item.col4 || "").toLowerCase();
 
     const matchesSearchTerm = sheetHeaders.some((header) => {
       const value = item[header.id];
@@ -280,8 +329,6 @@ const Tracker = () => {
       ? col4Val.includes(col4Filter.toLowerCase())
       : true;
 
-    // The main role-based filtering is already done in fetchTrackerData,
-    // so here we just combine the existing search and filter inputs.
     return matchesSearchTerm && matchesCol2 && matchesCol4;
   });
 
@@ -295,18 +342,14 @@ const Tracker = () => {
       const csvContent = [
         exportHeaders.map((header) => header.label).join(","),
         ...filteredIndents.map((item) => {
-          const actionPlaceholder = "Update"; // This is just a placeholder for the action column in export
+          const actionPlaceholder = "Update";
           const rowValues = sheetHeaders.map((header) => {
             let value = item[header.id] || "";
-            // Apply date formatting for export as well
-            if (header.id === "col12" || header.id === "col13") {
-              // Assuming these are date columns
+            if (header.id === "col12" || header.id === "col13" || header.id === "col17") {
               value = formatDateToDDMMYYYY(value);
             }
             return typeof value === "string" &&
-              (value.includes(",") ||
-                value.includes('"') ||
-                value.includes("\n"))
+              (value.includes(",") || value.includes('"') || value.includes("\n"))
               ? `"${value.replace(/"/g, '""')}"`
               : value;
           });
@@ -340,12 +383,24 @@ const Tracker = () => {
     fetchTrackerData();
   };
 
-  // --- UPDATED LOADING/ERROR UI ---
+  const toggleCardExpansion = (cardId) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(cardId)) {
+        newSet.delete(cardId);
+      } else {
+        newSet.add(cardId);
+      }
+      return newSet;
+    });
+  };
+
+  // Loading/Error UI remains the same
   if (!isAuthenticated || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50 to-teal-50 flex items-center justify-center">
+      <div className="h-screen bg-gradient-to-br from-slate-50 via-green-50 to-teal-50 flex items-center justify-center">
         <div className="text-center">
-          {!isAuthenticated && !isLoading ? ( // If not authenticated and not loading, display login message
+          {!isAuthenticated && !isLoading ? (
             <>
               <div className="text-red-500 mb-4">
                 <svg
@@ -367,7 +422,6 @@ const Tracker = () => {
               </p>
             </>
           ) : (
-            // Otherwise, display loading spinner
             <>
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
               <p className="text-slate-600 font-medium">
@@ -382,7 +436,7 @@ const Tracker = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50 to-teal-50 flex items-center justify-center">
+      <div className="h-screen bg-gradient-to-br from-slate-50 via-green-50 to-teal-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
           <div className="text-red-500 mb-4">
             <svg
@@ -413,133 +467,239 @@ const Tracker = () => {
       </div>
     );
   }
-  // --- END UPDATED LOADING/ERROR UI ---
 
   return (
     <>
       <Toaster position="top-right" />
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-3 lg:p-8">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {/* Main Card */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-2 sm:px-8 py-2 sm:py-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                  <h3 className="text-2xl font-bold text-white mb-2">
-                    Dealer Tracking
-                  </h3>
-                  <p className="text-green-50 text-lg">
-                    Comprehensive view of all dealer interactions and follow-ups
-                  </p>
-                  {/* Display current user info for testing/debugging */}
-                  <p className="text-green-100 text-sm mt-2">
-                    Current User:{" "}
-                    <span className="font-semibold">
-                      {currentUserSalesPersonName}
-                    </span>{" "}
-                    (Role: <span className="font-semibold">{userRole}</span>)
-                  </p>
+      <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-3 lg:p-8 overflow-hidden">
+        <div className="max-w-7xl mx-auto h-full flex flex-col">
+          {/* Main Card - Takes full height */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col flex-1">
+            {/* Fixed Header Section */}
+            <div className="flex-shrink-0">
+              <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-2 sm:px-8 py-2 sm:py-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div>
+                    <h3 className="text-2xl font-bold text-white mb-2">
+                      Dealer Tracking
+                    </h3>
+                    <p className="text-green-50 text-lg">
+                      Comprehensive view of all dealer interactions and follow-ups
+                    </p>
+                    <p className="text-green-100 text-sm mt-2">
+                      Current User:{" "}
+                      <span className="font-semibold">
+                        {currentUserSalesPersonName}
+                      </span>{" "}
+                      (Role: <span className="font-semibold">{userRole}</span>)
+                      {isAdmin && " - Admin View"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <button
+                      onClick={refreshData}
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Refresh
+                    </button>
+                    <button
+                      onClick={exportData}
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
+                    >
+                      <DownloadIcon className="h-4 w-4" />
+                      Export
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <button
-                    onClick={refreshData}
-                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
-                  </button>
-                  <button
-                    onClick={exportData}
-                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
-                  >
-                    <DownloadIcon className="h-4 w-4" />
-                    Export
-                  </button>
+              </div>
+              
+              {/* Search Bar - Fixed */}
+              <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
+                <div className="flex items-center">
+                  <div className="relative w-full max-w-md">
+                    <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                    <input
+                      type="search"
+                      placeholder="Search dealers..."
+                      className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-slate-700 font-medium"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="p-2 sm:p-8">
-              <div className="flex items-center mb-6">
-                <div className="relative w-full max-w-md">
-                  <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-                  <input
-                    type="search"
-                    placeholder="Search dealers..."
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-slate-700 font-medium"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+
+            {/* Scrollable Content Section - Takes remaining space */}
+            <div className="flex-1 overflow-hidden">
+              {/* Desktop Table View (hidden on mobile) */}
+              <div className="hidden lg:block h-full">
+                <div className="h-full flex flex-col">
+                  {/* Fixed Table Header */}
+                  <div className="flex-shrink-0 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                    <table className="w-full">
+                      <thead>
+                        <tr>
+                          <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">
+                            Action
+                          </th>
+                          {sheetHeaders.map((header) => (
+                            <th
+                              key={header.id}
+                              className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap"
+                            >
+                              {header.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                    </table>
+                  </div>
+                  
+                  {/* Scrollable Table Body - Takes all remaining space */}
+                  <div className="flex-1 overflow-auto">
+                    <table className="w-full">
+                      <tbody className="bg-white divide-y divide-slate-200">
+                        {filteredIndents.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={sheetHeaders.length + 1}
+                              className="px-6 py-12 text-center text-slate-500 font-medium"
+                            >
+                              No results found.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredIndents.map((item) => (
+                            <tr
+                              key={item._id}
+                              className="hover:bg-slate-50 transition-colors duration-150 cursor-pointer"
+                            >
+                              <td className="px-6 py-4 text-left">
+                                <button
+                                  className="bg-gradient-to-r from-green-100 to-teal-100 text-green-700 border border-green-200 hover:from-green-200 hover:to-teal-200 font-medium py-2 px-4 rounded-lg text-sm flex items-center gap-2 transition-all duration-200"
+                                  onClick={() => {
+                                    console.log("✏️ Selected item for update:", item);
+                                    setSelectedIndent(item);
+                                    setIsDialogOpen(true);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" /> Update
+                                </button>
+                              </td>
+                              {sheetHeaders.map((header) => (
+                                <td
+                                  key={header.id}
+                                  className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900"
+                                >
+                                  {header.id === "col12" ||
+                                  header.id === "col13" ||
+                                  header.id === "col17"
+                                    ? formatDateToDDMMYYYY(item?.[header.id])
+                                    : item?.[header.id] || "—"}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-r from-slate-50 to-slate-100">
-                    <tr>
-                      {/* Action column header first */}
-                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">
-                        Action
-                      </th>
-                      {sheetHeaders.map((header) => (
-                        <th
-                          key={header.id}
-                          className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap"
-                        >
-                          {header.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-200">
-                    {filteredIndents.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={sheetHeaders.length + 1}
-                          className="px-6 py-12 text-center text-slate-500 font-medium"
-                        >
-                          No results found.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredIndents.map((item) => (
-                        <tr
+              {/* Mobile Card View (hidden on desktop) */}
+              <div className="lg:hidden h-full overflow-auto">
+                {filteredIndents.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center text-slate-500 font-medium">
+                      No results found.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 space-y-4">
+                    {filteredIndents.map((item) => {
+                      const isExpanded = expandedCards.has(item._id);
+                      const primaryFields = sheetHeaders.slice(0, 4); // First 4 fields for collapsed view
+                      const secondaryFields = sheetHeaders.slice(4); // Remaining fields for expanded view
+
+                      return (
+                        <div
                           key={item._id}
-                          className="hover:bg-slate-50 transition-colors duration-150 cursor-pointer"
+                          className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
                         >
-                          {/* Action button in the first cell */}
-                          <td className="px-6 py-4 text-left">
-                            <button
-                              className="bg-gradient-to-r from-green-100 to-teal-100 text-green-700 border border-green-200 hover:from-green-200 hover:to-teal-200 font-medium py-2 px-4 rounded-lg text-sm flex items-center gap-2 transition-all duration-200"
-                              onClick={() => {
-                                console.log(
-                                  "✏️ Selected item for update:",
-                                  item
-                                );
-                                setSelectedIndent(item);
-                                setIsDialogOpen(true);
-                              }}
-                            >
-                              <Eye className="h-4 w-4" /> Update
-                            </button>
-                          </td>
-                          {sheetHeaders.map((header) => (
-                            <td
-                              key={header.id}
-                              className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900"
-                            >
-                              {/* Apply formatting only for known date columns */}
-                              {header.id === "col12" ||
-                              header.id === "col13" ||
-                              header.id === "col17" // Added col17 for Last Call Date
-                                ? formatDateToDDMMYYYY(item?.[header.id])
-                                : item?.[header.id] || "—"}
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                          {/* Card Header - Always Visible */}
+                          <div 
+                            className="p-4 border-b border-slate-100 cursor-pointer"
+                            onClick={() => toggleCardExpansion(item._id)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <h3 className="font-bold text-slate-900 text-lg mb-2">
+                                  {item.col5 || "Unnamed Dealer"}
+                                </h3>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                  {primaryFields.map((header) => (
+                                    <div key={header.id}>
+                                      <span className="text-slate-500 font-medium">{header.label}:</span>
+                                      <p className="text-slate-900 font-semibold truncate">
+                                        {header.id === "col12" ||
+                                        header.id === "col13" ||
+                                        header.id === "col17"
+                                          ? formatDateToDDMMYYYY(item?.[header.id])
+                                          : item?.[header.id] || "—"}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <button className="ml-2 text-slate-400 hover:text-slate-600 transition-colors">
+                                {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expandable Content */}
+                          {isExpanded && (
+                            <div className="p-4 bg-slate-50 border-t border-slate-200">
+                              <div className="space-y-3">
+                                {secondaryFields.map((header) => (
+                                  <div key={header.id} className="flex justify-between items-start">
+                                    <span className="text-slate-600 font-medium text-sm flex-shrink-0 mr-2">
+                                      {header.label}:
+                                    </span>
+                                    <span className="text-slate-900 font-semibold text-sm text-right break-words flex-1">
+                                      {header.id === "col12" ||
+                                      header.id === "col13" ||
+                                      header.id === "col17"
+                                        ? formatDateToDDMMYYYY(item?.[header.id])
+                                        : item?.[header.id] || "—"}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {/* Action Button */}
+                              <div className="mt-4 pt-4 border-t border-slate-200">
+                                <button
+                                  className="w-full bg-gradient-to-r from-green-100 to-teal-100 text-green-700 border border-green-200 hover:from-green-200 hover:to-teal-200 font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 transition-all duration-200"
+                                  onClick={() => {
+                                    console.log("✏️ Selected item for update:", item);
+                                    setSelectedIndent(item);
+                                    setIsDialogOpen(true);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" /> Update Dealer
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -550,7 +710,6 @@ const Tracker = () => {
         onClose={() => {
           console.log("Attempting to close dialog from Tracker.");
           setIsDialogOpen(false);
-          // Optional: Re-fetch data after dialog closes to see updates
           fetchTrackerData();
         }}
         dealerData={selectedIndent}

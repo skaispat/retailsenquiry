@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
@@ -6,6 +5,7 @@ import { Users, Store, ShoppingBag, AlertCircle, X } from "lucide-react";
 import MonthlySales from "../components/dashboard/MonthlySales";
 import OrderStatus from "../components/dashboard/OrderStatus";
 import { AuthContext } from "../App";
+import supabase from "../SupaabseClient";
 
 function Dashboard() {
   const { currentUser, isAuthenticated } = useContext(AuthContext);
@@ -34,90 +34,54 @@ function Dashboard() {
   const [dialogData, setDialogData] = useState([]);
   const [dialogHeaders, setDialogHeaders] = useState([]);
 
+  // Updated column mapping for Supabase FMS table - using actual column names
   const FMS_COLUMNS_INFO = {
-    0: { label: "Timestamp", property: "col0", type: "datetime" }, // Column A
-    1: { label: "Dealer Code", property: "col1", type: "text" }, // Column B
-    2: { label: "Dealer Name", property: "col5", type: "text" }, // Column C (Corrected based on common spreadsheet layouts)
-    3: { label: "Dealer Region", property: "col3", type: "text" }, // Column D
-    4: { label: "Sales Person Name", property: "col4", type: "text" }, // Column E
-    5: { label: "Email", property: "col11", type: "text" }, // Column L
-    6: { label: "Contact No", property: "col10", type: "number" }, // Column K
-    7: { label: "Address", property: "col7", type: "text" }, // Column H
-    8: { label: "Last Called On", property: "col17", type: "date" }, // Column R
-    17: { label: "Order Status", property: "col19", type: "text"},
-    9: { label: "what did the Customer Say", property: "col20", type: "text" }, // Column U
-    10: { label: "Next Follow Up Date", property: "col22", type: "date" }, // Column W
-    11: { label: "Next Action", property: "col21", type: "text" }, // Column V
-    12: { label: "Dealer Size", property: "col8", type: "text" }, // Column I
-    13: { label: "Order Quantity", property: "col23", type: "number" }, // Column X
-    14: { label: "Ordered Products", property: "col24", type: "text" }, // Column Y
-    15: { label: "Value of Order", property: "col25", type: "number" }, // Column Z
-    16: { label: "Last Order Before", property: "col26", type: "date" }, // Column AA
-    // For pending enquiries, you mentioned col14 and col15. Let's ensure they are defined if used.
-    // Assuming col14 and col15 are "Enquiry Received Date" and "Enquiry Closed Date"
+    timestamp: { label: "Timestamp", property: "timestamp", type: "datetime" },
+    dealer_code: { label: "Dealer Code", property: "dealer_code", type: "text" },
+    dealer_name: { label: "Dealer Name", property: "dealer_name", type: "text" },
+    dealer_region: { label: "Dealer Region", property: "dealer_region", type: "text" },
+    sales_person_name: { label: "Sales Person Name", property: "sales_person_name", type: "text" },
+    email: { label: "Email", property: "email", type: "text" },
+    contact_no: { label: "Contact No", property: "contact_number", type: "number" },
+    address: { label: "Address", property: "address", type: "text" },
+    last_called_on: { label: "Last Called On", property: "last_date_of_call", type: "date" },
+    order_status: { label: "Order Status", property: "status", type: "text"},
+    customer_feedback: { label: "What did the Customer Say", property: "what_did_the_customer_say", type: "text" },
+    next_follow_up: { label: "Next Follow Up Date", property: "next_date_of_call", type: "date" },
+    next_action: { label: "Next Action", property: "next_action", type: "text" },
+    dealer_size: { label: "Dealer Size", property: "dealer_size", type: "text" },
+    order_quantity: { label: "Order Quantity", property: "order_qty", type: "number" },
+    ordered_products: { label: "Ordered Products", property: "order_products", type: "text" },
+    value_of_order: { label: "Value of Order", property: "value_of_order", type: "number" },
+    last_order_before: { label: "Last Order Before", property: "last_order_before", type: "date" },
+    area_name: { label: "Area Name", property: "area_name", type: "text" },
   };
 
-
   const FMS_DISPLAY_COLUMNS_FOR_DIALOG = [
-    4, // Sales Person Name
-    1, // Dealer Code
-    2, // Dealer Name
-    6,
-    10, // Next Follow Up Date
-    3, // Dealer Region
-    8, // Last Called On
-    17,
-    9, // what did the Customer Say
-    11, // Next Action
-    12, // Dealer Size
-    13, // Order Quantity
-    14, // Ordered Products (This was likely col24 from above. Re-verified indexes for clarity)
-    15, // Value of Order (This was likely col25 from above. Re-verified indexes for clarity)
-    16, // Last Order Before (This was likely col26 from above. Re-verified indexes for clarity)
+    "sales_person_name",
+    "dealer_code", 
+    "dealer_name",
+    "contact_no",
+    "next_follow_up",
+    "dealer_region",
+    "last_called_on",
+    "order_status",
+    "customer_feedback",
+    "next_action",
+    "dealer_size",
+    "order_quantity",
+    "ordered_products",
+    "value_of_order",
+    "last_order_before",
+    "area_name",
   ];
-
 
   const formatDate = (dateValue) => {
     if (!dateValue) return "—";
     try {
-      let date;
-      if (typeof dateValue === 'string' && dateValue.startsWith('Date(')) {
-        const match = dateValue.match(/Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,(\d{1,2}),(\d{1,2}),(\d{1,2}))?\)/);
-        if (match) {
-          const year = parseInt(match[1]);
-          const month = parseInt(match[2]); 
-          const day = parseInt(match[3]);
-          const hours = parseInt(match[4] || 0);
-          const minutes = parseInt(match[5] || 0);
-          const seconds = parseInt(match[6] || 0);
-          date = new Date(year, month, day, hours, minutes, seconds);
-        }
-      } else if (dateValue instanceof Date) {
-        date = dateValue;
-      } else if (typeof dateValue === 'number' && dateValue > 0) {
-        // Handle Excel/Google Sheets numeric date format (days since 1899-12-30)
-        // Note: Google Sheets can sometimes add an extra day for leap year bug in old Excel, but this is generally robust.
-        const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899 is day 0 in Excel's date system
-        date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000);
-      } else if (typeof dateValue === 'string') {
-        date = new Date(dateValue);
-        if (isNaN(date.getTime())) {
-          // Try DD/MM/YYYY
-          const ddmmyyyy = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-          if (ddmmyyyy) {
-            date = new Date(ddmmyyyy[3], ddmmyyyy[2] - 1, ddmmyyyy[1]);
-          } else {
-            // Try MM/DD/YYYY as fallback (less common in India, but for robustness)
-            const mmddyyyy = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-            if (mmddyyyy) {
-              date = new Date(mmddyyyy[3], mmddyyyy[1] - 1, mmddyyyy[2]);
-            }
-          }
-        }
-      }
-
-      if (!date || isNaN(date.getTime())) {
-        return dateValue; // Return original if date is still invalid or null
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) {
+        return dateValue;
       }
 
       const day = date.getDate().toString().padStart(2, '0');
@@ -129,7 +93,6 @@ function Dashboard() {
       return dateValue;
     }
   };
-
 
   useEffect(() => {
     const fetchData = async () => {
@@ -144,37 +107,73 @@ function Dashboard() {
       }
 
       try {
-        const response = await fetch(
-          "https://docs.google.com/spreadsheets/d/15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk/gviz/tq?tqx=out:json&sheet=FMS"
-        );
-        const text = await response.text();
-        const jsonStart = text.indexOf("{");
-        const jsonEnd = text.lastIndexOf("}") + 1;
-        const jsonData = text.substring(jsonStart, jsonEnd);
-        const data = JSON.parse(jsonData);
+        console.log("🔄 Fetching data from Supabase FMS table...");
 
-        if (data?.table?.rows) {
-          const allRows = data.table.rows.map((row, rowIndex) => {
-            const rowData = { _rowIndex: rowIndex };
-            if (row.c) {
-              row.c.forEach((cell, cellIndex) => {
-                let cellValue = cell?.v ?? cell?.f ?? "";
-                const columnInfo = FMS_COLUMNS_INFO[cellIndex];
+        // Build query based on user role
+        let query = supabase
+          .from('FMS')
+          .select('*')
+          .order('timestamp', { ascending: false });
 
-                // Apply initial formatting for date/datetime types
-                if (columnInfo && (columnInfo.type === 'date' || columnInfo.type === 'datetime')) {
-                  cellValue = formatDate(cellValue);
-                }
-                rowData[`col${cellIndex}`] = cellValue;
-              });
-            }
+        // If user is not admin, only show their records
+        if (userRole.toLowerCase() !== 'admin') {
+          query = query.eq('sales_person_name', currentUserSalesPersonName);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          throw new Error(`Supabase error: ${error.message}`);
+        }
+
+        console.log("✅ FMS data loaded successfully from Supabase");
+
+        if (data && data.length > 0) {
+          const allRows = data.map((row, rowIndex) => {
+            // Use direct Supabase column names without mapping
+            const rowData = { 
+              _rowIndex: rowIndex,
+              id: row.id,
+              // Use actual Supabase column names
+              timestamp: row.timestamp,
+              dealer_code: row.dealer_code || row.reg_xyy || row.dc_dealer_code,
+              dealer_name: row.dealer_name,
+              dealer_region: row.dealer_region || row.district_name,
+              sales_person_name: row.sales_person_name,
+              email: row.email || row.email_address,
+              contact_number: row.contact_number || row.contact_no,
+              address: row.address,
+              last_date_of_call: row.last_date_of_call,
+              status: row.status,
+              what_did_the_customer_say: row.what_did_the_customer_say || row.what_did_live_costs,
+              next_date_of_call: row.next_date_of_call,
+              next_action: row.next_action || row.next_sector,
+              dealer_size: row.dealer_size,
+              order_qty: row.order_qty,
+              order_products: row.order_products || row.order_problem,
+              value_of_order: row.value_of_order,
+              last_order_before: row.last_order_before,
+              area_name: row.area_name,
+              // Add select_value if it exists
+              select_value: row.select_value,
+            };
+
+            // Apply formatting for date fields
+            Object.keys(FMS_COLUMNS_INFO).forEach(key => {
+              const columnInfo = FMS_COLUMNS_INFO[key];
+              if ((columnInfo.type === 'date' || columnInfo.type === 'datetime') && rowData[columnInfo.property]) {
+                rowData[columnInfo.property] = formatDate(rowData[columnInfo.property]);
+              }
+            });
+
             return rowData;
           });
+
           setAllFMSData(allRows);
 
           const salespersons = new Set();
           allRows.forEach(row => {
-            const salespersonName = row.col4;
+            const salespersonName = row.sales_person_name;
             if (salespersonName && typeof salespersonName === 'string' && salespersonName.trim() !== '') {
               salespersons.add(salespersonName.trim());
             }
@@ -182,18 +181,31 @@ function Dashboard() {
           setUniqueSalespersons([...Array.from(salespersons).sort()]);
 
         } else {
-          setError("No data found in the FMS sheet.");
+          // No data found - set all counts to 0 and show empty state
+          console.log("No data found in FMS table for user:", currentUserSalesPersonName);
+          setAllFMSData([]);
+          setUniqueSalespersons([]);
+          setTotalCount(0);
+          setActiveDealersCount(0);
+          setTotalOrdersCount(0);
+          setPendingEnquiriesCount(0);
+          setError("No data found in the FMS table.");
         }
       } catch (error) {
         console.error("DEBUG: Error fetching data:", error);
         setError(`Failed to load data: ${error.message}`);
+        // Reset all counts to 0 on error
+        setTotalCount(0);
+        setActiveDealersCount(0);
+        setTotalOrdersCount(0);
+        setPendingEnquiriesCount(0);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [isAuthenticated, currentUser]);
+  }, [isAuthenticated, currentUser, currentUserSalesPersonName, userRole]);
 
   const currentFilteredData = useMemo(() => {
     if (allFMSData.length === 0 || !isAuthenticated || !currentUser) {
@@ -203,7 +215,7 @@ function Dashboard() {
     let tempFilteredData = [...allFMSData];
 
     tempFilteredData = tempFilteredData.filter((row) => {
-      const rowSalespersonName = row.col4;
+      const rowSalespersonName = row.sales_person_name;
       const currentUserNameNormalized = currentUserSalesPersonName ? currentUserSalesPersonName.trim().toLowerCase() : '';
       const rowSalespersonNameNormalized = rowSalespersonName ? String(rowSalespersonName).trim().toLowerCase() : '';
 
@@ -224,54 +236,60 @@ function Dashboard() {
       end.setHours(23, 59, 59, 999);
 
       tempFilteredData = tempFilteredData.filter((row) => {
-        // Use the already formatted date string (DD/MM/YYYY) from col0
-        const dateParts = row.col0 ? String(row.col0).split('/') : null;
-        if (!dateParts || dateParts.length !== 3) return false;
-
-        const day = parseInt(dateParts[0], 10);
-        const month = parseInt(dateParts[1], 10) - 1;
-        const year = parseInt(dateParts[2], 10);
-
-        const rowDate = new Date(year, month, day);
-        return !isNaN(rowDate.getTime()) && rowDate >= start && rowDate <= end;
+        if (!row.timestamp) return false;
+        
+        try {
+          const date = new Date(row.timestamp);
+          return !isNaN(date.getTime()) && date >= start && date <= end;
+        } catch (error) {
+          console.error('Date filtering error:', error, 'Date value:', row.timestamp);
+          return false;
+        }
       });
     }
 
     return tempFilteredData;
   }, [allFMSData, startDate, endDate, isAdmin, currentUserSalesPersonName, selectedSalesperson, isAuthenticated, currentUser]);
 
-
   const filteredDataRef = useRef([]);
   useEffect(() => {
     filteredDataRef.current = currentFilteredData;
   }, [currentFilteredData]);
-useEffect(() => {
-    // Keep your existing logic for other counts
+
+  useEffect(() => {
+    // Reset counts to 0 if no filtered data
+    if (currentFilteredData.length === 0) {
+      setTotalCount(0);
+      setActiveDealersCount(0);
+      setTotalOrdersCount(0);
+      setPendingEnquiriesCount(0);
+      return;
+    }
+    
     setTotalCount(currentFilteredData.length);
-    const dealers = new Set(currentFilteredData.map(row => row.col1).filter(Boolean));
+    
+    const dealers = new Set(currentFilteredData.map(row => row.dealer_code).filter(Boolean));
     setActiveDealersCount(dealers.size);
-    const ordersCount = currentFilteredData.filter(row => row.col25 && String(row.col25).trim() !== "").length;
+    
+    const ordersCount = currentFilteredData.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "").length;
     setTotalOrdersCount(ordersCount);
 
-    // --- MODIFIED PENDING/NOT PENDING LOGIC BASED ON COL19 (STAGE) ---
     const pendingCount = currentFilteredData.filter(row => {
-        const stage = row.col19 ? String(row.col19).trim().toLowerCase() : '';
-
-        // An enquiry is 'pending' if its stage is NOT "order received" AND NOT "order not received"
-        // This implies it's still in an active, unresolved state.
-        return stage !== "order received" && stage !== "order not received";
+      const stage = row.status ? String(row.status).trim().toLowerCase() : '';
+      return stage !== "order received" && stage !== "order not received";
     }).length;
 
     setPendingEnquiriesCount(pendingCount);
-    // --- END MODIFIED LOGIC ---
-
-}, [currentFilteredData])
-
+  }, [currentFilteredData]);
 
   const handleCardClick = (kpiType) => {
     let dataForDialog = [];
     let title = "";
-    let headers = FMS_DISPLAY_COLUMNS_FOR_DIALOG.map(index => FMS_COLUMNS_INFO[index]).filter(Boolean);
+    
+    // Create headers for dialog based on display columns
+    const headers = FMS_DISPLAY_COLUMNS_FOR_DIALOG.map(columnKey => 
+      FMS_COLUMNS_INFO[columnKey]
+    ).filter(Boolean);
 
     const dataToFilter = filteredDataRef.current;
 
@@ -282,42 +300,28 @@ useEffect(() => {
       title = "Active Dealers";
       const uniqueDealerCodes = new Set();
       dataForDialog = dataToFilter.filter(row => {
-        if (row.col1 && !uniqueDealerCodes.has(row.col1)) {
-          uniqueDealerCodes.add(row.col1);
+        if (row.dealer_code && !uniqueDealerCodes.has(row.dealer_code)) {
+          uniqueDealerCodes.add(row.dealer_code);
           return true;
         }
         return false;
       });
     } else if (kpiType === "totalOrders") {
       title = "Total Orders";
-      dataForDialog = dataToFilter.filter(row => row.col25 && String(row.col25).trim() !== "");
+      dataForDialog = dataToFilter.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "");
     } else if (kpiType === "pendingEnquiries") {
       title = "Pending Enquiries";
       dataForDialog = dataToFilter.filter(row => {
-        const colO = row.col14; // Enquiry Received Date
-        const colP = row.col15; // Enquiry Closed Date
-        return (colO && String(colO).trim() !== "—" && String(colO).trim() !== "") && (!colP || String(colP).trim() === "—" || String(colP).trim() === "");
+        const stage = row.status ? String(row.status).trim().toLowerCase() : '';
+        return stage !== "order received" && stage !== "order not received";
       });
     }
 
-    // Apply formatting specifically for the dialog's data display
-    const formattedDialogData = dataForDialog.map(row => {
-      const newRow = { ...row };
-      headers.forEach(header => {
-        // Only format if the column's type is date/datetime AND it has a value
-        if ((header.type === 'date' || header.type === 'datetime') && newRow[header.property]) {
-          newRow[header.property] = formatDate(newRow[header.property]);
-        }
-      });
-      return newRow;
-    });
-
     setDialogTitle(title);
-    setDialogData(formattedDialogData); // Use the formatted data
+    setDialogData(dataForDialog);
     setDialogHeaders(headers);
     setIsDataDialogOpen(true);
   };
-
 
   if (isLoading) {
     return (
@@ -330,40 +334,140 @@ useEffect(() => {
     );
   }
 
-  if (error) {
+  // Show dashboard with all zeros when no data is found
+  if (error && allFMSData.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="text-red-500 mb-4">
-            <svg
-              className="w-12 h-12 mx-auto"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-3 sm:p-6">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 sm:space-y-2">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Dashboard
+              </h1>
+              <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
+                Welcome to your business overview, {currentUserSalesPersonName}!
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-md sm:shadow-lg border border-white/20 w-full sm:w-auto">
+              <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
+                <span className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">
+                  Today:
+                </span>
+                <span className="font-medium text-xs sm:text-sm md:text-base">
+                  {new Date().toLocaleDateString("en-GB")}
+                </span>
+              </div>
+              <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
+                <label htmlFor="startDate" className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">From:</label>
+                <input type="date" id="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="p-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
+                <label htmlFor="endDate" className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">To:</label>
+                <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="p-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              {isAdmin && (
+                <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
+                  <label htmlFor="salespersonFilter" className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">Salesperson:</label>
+                  <select id="salespersonFilter" value={selectedSalesperson} onChange={(e) => setSelectedSalesperson(e.target.value)} className="p-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Salespersons</option>
+                    {uniqueSalespersons.map((name) => (<option key={name} value={name}>{name}</option>))}
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            Error Loading Dashboard Data
-          </h3>
-          <p className="text-red-600 font-medium mb-4">{error}</p>
-          {!isAuthenticated && (
-            <p className="text-gray-600">Please log in to access the dashboard.</p>
-          )}
-          {isAuthenticated && (
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
-            >
-              Retry
-            </button>
-          )}
+
+          {/* Show dashboard with all zeros */}
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Total Records Card - 0 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
+              <div className="h-full bg-gradient-to-br from-blue-400 via-blue-500 to-indigo-500 p-3 sm:p-4 md:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-blue-100 uppercase tracking-wider mb-1">Total Records</h3>
+                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
+                      0
+                    </div>
+                  </div>
+                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
+                    <Users className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Active Dealers Card - 0 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
+              <div className="h-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-3 sm:p-4 md:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-purple-100 uppercase tracking-wider mb-1">Active Dealers</h3>
+                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
+                      0
+                    </div>
+                  </div>
+                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
+                    <Store className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Total Orders Card - 0 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
+              <div className="h-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-3 sm:p-4 md:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-pink-100 uppercase tracking-wider mb-1">Total Orders</h3>
+                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
+                      0
+                    </div>
+                  </div>
+                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
+                    <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Pending Enquiries Card - 0 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
+              <div className="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-3 sm:p-4 md:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-amber-100 uppercase tracking-wider mb-1">Pending Enquiries</h3>
+                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
+                      0
+                    </div>
+                  </div>
+                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
+                    <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Empty charts section */}
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 p-4 sm:p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Monthly Sales</h3>
+              <div className="h-64 flex items-center justify-center text-gray-500">
+                No data available
+              </div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 p-4 sm:p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Order Status</h3>
+              <div className="h-64 flex items-center justify-center text-gray-500">
+                No data available
+              </div>
+            </div>
+          </div>
+
+          {/* Error message banner */}
+          {/* <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+              <p className="text-red-700 font-medium">{error}</p>
+            </div>
+          </div> */}
         </div>
       </div>
     );
@@ -515,46 +619,46 @@ useEffect(() => {
             </div>
 
             <div className="overflow-auto h-[calc(50vh-140px)] border border-gray-200 rounded-lg">
-  <div className="min-w-full">
-    <table className="min-w-full divide-y divide-gray-100">
-      <thead className="bg-gray-100 sticky top-0 z-10">
-        <tr>
-          {dialogHeaders.map((header) => (
-            <th
-              key={header.property}
-              scope="col"
-              className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap"
-            >
-              {header.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody className="bg-white divide-y divide-gray-100">
-        {dialogData.length === 0 ? (
-          <tr>
-            <td colSpan={dialogHeaders.length} className="px-6 py-12 text-center text-gray-500 font-medium text-base">
-              No data available for this selection.
-            </td>
-          </tr>
-        ) : (
-          dialogData.map((row, rowIndex) => (
-            <tr key={row._rowIndex || `row-${rowIndex}`} className="hover:bg-gray-50">
-              {dialogHeaders.map((header) => (
-                <td
-                  key={`${row._rowIndex}-${header.property}`}
-                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-800"
-                >
-                  {row[header.property] || "—"}
-                </td>
-              ))}
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-  </div>
-</div>
+              <div className="min-w-full">
+                <table className="min-w-full divide-y divide-gray-100">
+                  <thead className="bg-gray-100 sticky top-0 z-10">
+                    <tr>
+                      {dialogHeaders.map((header) => (
+                        <th
+                          key={header.property}
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap"
+                        >
+                          {header.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {dialogData.length === 0 ? (
+                      <tr>
+                        <td colSpan={dialogHeaders.length} className="px-6 py-12 text-center text-gray-500 font-medium text-base">
+                          No data available for this selection.
+                        </td>
+                      </tr>
+                    ) : (
+                      dialogData.map((row, rowIndex) => (
+                        <tr key={row.id || `row-${rowIndex}`} className="hover:bg-gray-50">
+                          {dialogHeaders.map((header) => (
+                            <td
+                              key={`${row.id}-${header.property}`}
+                              className="px-6 py-4 whitespace-nowrap text-sm text-gray-800"
+                            >
+                              {row[header.property] || "—"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       )}

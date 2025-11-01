@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
+import { AuthContext } from "../App";
+import supabase from "../SupaabseClient";
 
 export default function TrackerDialog({
   isOpen,
@@ -20,9 +22,9 @@ export default function TrackerDialog({
     requireStatus: true,
   });
 
-  // Modal states - Added from previous components
+  // Modal states
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState("success"); // "success" or "error"
+  const [modalType, setModalType] = useState("success");
   const [modalMessage, setModalMessage] = useState("");
 
   const [formData, setFormData] = useState({
@@ -34,20 +36,23 @@ export default function TrackerDialog({
     nextAction: "",
     nextCallDate: "",
     valueOfOrder: "",
+    subStage: "" // Added subStage for Site/Engineer
   });
 
-  const [showNotInterestedSection, setShowNotInterestedSection] =
-    useState(false);
-  const [showPaymentCollectionSection, setShowPaymentCollectionSection] =
-    useState(false);
+  const [showNotInterestedSection, setShowNotInterestedSection] = useState(false);
+  const [showPaymentCollectionSection, setShowPaymentCollectionSection] = useState(false);
   const [notInterestedReason, setNotInterestedReason] = useState("");
   const [paymentCollection, setPaymentCollection] = useState("");
   const [nextCollectionDate, setNextCollectionDate] = useState("");
   const [whyNotCollection, setWhyNotCollection] = useState("");
 
-  const APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycby8tWRO5JWFmJmDECvf85x8baVHqXNfePy-w_tpk0ZL3lrby_M2Z9jNoRvlLokFIQ8/exec";
+  // Get current user from context
+  const { currentUser } = useContext(AuthContext);
 
+  // Get entity type from Supabase data
+  const entityType = dealerData?.supabase_data?.select_value || "";
+
+  // Define statuses and stages from masterData
   const statuses = masterData
     ? [
         ...new Set(
@@ -74,19 +79,63 @@ export default function TrackerDialog({
       ]
     : [];
 
-  // console.log("Statges:", stages);
+  /**
+   * Get stage options based on entity type
+   */
+  const getStageOptions = () => {
+    if (entityType === "Site/Engineer") {
+      return [
+        "Follow-up",
+        "Call",
+        "Call not picked",
+        "Order Closed",
+        "Order Pending"
+      ];
+    } else {
+      // For Dealer and Distributor - original options
+      return [
+        "Follow-Up",
+        "Call",
+        "Call Not Picked",
+        "Introductory Call",
+        "First Visit/ Call",
+        "Site Visit",
+        "Quotation Sent",
+        "Order Received",
+        "Order Not Received",
+        "Not Interested",
+        "Payment Enquiry",
+        ...stages.filter(stage => ![
+          "Follow-Up", "Call", "Call Not Picked", "Introductory Call", 
+          "First Visit/ Call", "Site Visit", "Quotation Sent", 
+          "Order Received", "Order Not Received", "Not Interested", 
+          "Payment Enquiry"
+        ].includes(stage))
+      ];
+    }
+  };
+
+  /**
+   * Get sub-stage options for Site/Engineer Order stages
+   */
+  const getSubStageOptions = () => {
+    if (entityType === "Site/Engineer" && 
+        (formData.stage === "Order Closed" || formData.stage === "Order Pending")) {
+      return ["Order Received", "Order Not Received"];
+    }
+    return [];
+  };
+
+  const subStageOptions = getSubStageOptions();
 
   /**
    * Shows centered modal popup with auto-hide functionality
-   * @param {string} message - The message to display.
-   * @param {'success' | 'error'} type - The type of modal (success or error).
    */
   const showToast = (message, type = "success") => {
     setModalMessage(message);
     setModalType(type);
     setShowModal(true);
 
-    // Auto-hide after 3 seconds
     setTimeout(() => {
       setShowModal(false);
       setModalMessage("");
@@ -102,60 +151,34 @@ export default function TrackerDialog({
   };
 
   const formatDateToDDMMYYYY = (dateString) => {
-    console.log("formatDateToDDMMYYYY received:", dateString);
-
     if (!dateString) return "N/A";
 
     let date;
-    // Regex to match "Date(YYYY,MM,DD,HH,MM,SS)" or "Date(YYYY,MM,DD)"
-    // It is important that the month is already 0-indexed if coming from Google Sheets Date() serialization.
     const dateMatch = dateString.match(
       /^Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,(\d{1,2}),(\d{1,2}),(\d{1,2}))?\)$/
     );
 
     if (dateMatch) {
       const year = parseInt(dateMatch[1], 10);
-      const month = parseInt(dateMatch[2], 10); // Use directly as it's likely already 0-indexed by the source
+      const month = parseInt(dateMatch[2], 10);
       const day = parseInt(dateMatch[3], 10);
       const hours = dateMatch[4] ? parseInt(dateMatch[4], 10) : 0;
       const minutes = dateMatch[5] ? parseInt(dateMatch[5], 10) : 0;
       const seconds = dateMatch[6] ? parseInt(dateMatch[6], 10) : 0;
-
-      console.log(
-        `Parsed components: Year=${year}, Month=${month}, Day=${day}, Hours=${hours}, Minutes=${minutes}, Seconds=${seconds}`
-      );
       date = new Date(year, month, day, hours, minutes, seconds);
     } else {
-      // Fallback for other date string formats (e.g., "YYYY-MM-DD", "DD/MM/YYYY")
-      console.log("Attempting to parse as a regular date string:", dateString);
       date = new Date(dateString);
     }
 
-    console.log("Date object created:", date);
     if (isNaN(date.getTime())) {
-      console.error("Invalid Date object after parsing:", dateString);
       return "N/A";
     }
 
-    const day = String(date.getDate()).padStart(2, "0");
-    // Month is 0-indexed in Date object, add 1 for display
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
+    const dayStr = String(date.getDate()).padStart(2, "0");
+    const monthStr = String(date.getMonth() + 1).padStart(2, "0");
+    const yearStr = date.getFullYear();
+    return `${dayStr}/${monthStr}/${yearStr}`;
   };
-
-  const formatTimestamp = () => {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, "0");
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const year = now.getFullYear();
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const seconds = String(now.getSeconds()).padStart(2, "0");
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-  };
-
-
 
   useEffect(() => {
     if (!formData.stage) {
@@ -169,17 +192,16 @@ export default function TrackerDialog({
         showValueOfOrder: false,
         requireStatus: true,
       }));
-      // Reset conditional sections
       setShowNotInterestedSection(false);
       setShowPaymentCollectionSection(false);
       return;
     }
 
-    // Handle special stages
+    // Handle special stages for all entity types
     if (formData.stage === "Not Interested") {
       setShowNotInterestedSection(true);
       setShowPaymentCollectionSection(false);
-    } else if (formData.stage === "Payment Collection") {
+    } else if (formData.stage === "Payment Enquiry") {
       setShowPaymentCollectionSection(true);
       setShowNotInterestedSection(false);
     } else {
@@ -187,49 +209,37 @@ export default function TrackerDialog({
       setShowPaymentCollectionSection(false);
     }
 
-    const isOrderStage = formData.stage === "Order Received";
-    const isOrderNotReceivedStage = formData.stage === "Order Not Received";
+    // Define stage visibility based on entity type and selected stage
+    const isOrderStage = formData.stage === "Order Received" || 
+                        (entityType === "Site/Engineer" && formData.stage === "Order Closed");
+    const isOrderNotReceivedStage = formData.stage === "Order Not Received" || 
+                                   (entityType === "Site/Engineer" && formData.stage === "Order Pending");
     const isFollowUpCallStage = [
       "Follow-Up",
       "Call Not Picked",
       "Introductory Call",
       "Call",
-  "First Visit/ Call",
+      "First Visit/ Call",
+      "Follow-up", // For Site/Engineer
+      "Call not picked" // For Site/Engineer
     ].includes(formData.stage);
 
-    // setFieldVisibility({
-    //   showCustomerFeedback: isFollowUpCallStage || isOrderNotReceivedStage,
-    //   showNextAction: isFollowUpCallStage || isOrderNotReceivedStage,
-    //   showNextCallDate: isFollowUpCallStage || isOrderNotReceivedStage,
-    //   showOrderQty: isOrderStage,
-    //   showOrderedProducts: isOrderStage,
-    //   showValueOfOrder: isOrderStage || isOrderNotReceivedStage,
-    //   requireStatus: true,
-    // });
-
     setFieldVisibility({
-  showCustomerFeedback: (isFollowUpCallStage || isOrderNotReceivedStage) && formData.stage !== "Call Not Picked",
-  showNextAction: isFollowUpCallStage || isOrderNotReceivedStage,
-  showNextCallDate: isFollowUpCallStage || isOrderNotReceivedStage,
-  showOrderQty: isOrderStage,
-  showOrderedProducts: isOrderStage,
-  showValueOfOrder: (isOrderStage || isOrderNotReceivedStage) && formData.stage !== "Order Not Received",
-  requireStatus: true,
-});
-  }, [formData.stage]);
+      showCustomerFeedback: (isFollowUpCallStage || isOrderNotReceivedStage) && 
+                           !["Call Not Picked", "Call not picked"].includes(formData.stage),
+      showNextAction: isFollowUpCallStage || isOrderNotReceivedStage,
+      showNextCallDate: isFollowUpCallStage || isOrderNotReceivedStage,
+      showOrderQty: isOrderStage,
+      showOrderedProducts: isOrderStage,
+      showValueOfOrder: (isOrderStage || isOrderNotReceivedStage) && 
+                       formData.stage !== "Order Not Received" && 
+                       formData.stage !== "Order Pending",
+      requireStatus: true,
+    });
+  }, [formData.stage, entityType]);
 
   useEffect(() => {
-    // console.log("TrackerDialog opened or dealerData changed.");
-
     if (isOpen && dealerData) {
-      // console.log("✅ Prop 'dealerData' received:", dealerData);
-      // console.log(
-      //   "🔎 inspecting 'dealerData.col17' (Last Call Date):",
-      //   dealerData.col17
-      // );
-
-      // console.log("📊 type of 'dealerData.col17' is:", typeof dealerData.col17);
-
       setFormData({
         orderQty: "",
         orderedProducts: "",
@@ -239,10 +249,9 @@ export default function TrackerDialog({
         nextAction: "",
         nextCallDate: "",
         valueOfOrder: "",
+        subStage: ""
       });
     } else {
-      // console.log("Dialog is closing or does not have data, resetting form.");
-
       setFormData({
         orderQty: "",
         orderedProducts: "",
@@ -252,10 +261,9 @@ export default function TrackerDialog({
         nextAction: "",
         nextCallDate: "",
         valueOfOrder: "",
+        subStage: ""
       });
       setErrors({});
-
-      // Add these reset lines here
       setNotInterestedReason("");
       setPaymentCollection("");
       setNextCollectionDate("");
@@ -295,6 +303,13 @@ export default function TrackerDialog({
       newErrors.stage = "Stage is required.";
     }
 
+    // For Site/Engineer Order stages, require sub-stage
+    // if (entityType === "Site/Engineer" && 
+    //     (formData.stage === "Order Closed" || formData.stage === "Order Pending") &&
+    //     !formData.subStage) {
+    //   newErrors.subStage = "Order status is required.";
+    // }
+
     if (fieldVisibility.showNextAction && !formData.nextAction) {
       newErrors.nextAction = "Next action is required.";
     }
@@ -316,103 +331,92 @@ export default function TrackerDialog({
       return;
     }
     setErrors({});
-
     setIsSubmitting(true);
 
     try {
       const dealerCode = dealerData?.col1 || "";
+      const dealerName = dealerData?.col5 || "";
+      const areaName = dealerData?.supabase_data?.area_name || ""; // Get area_name from Supabase data
+      
       if (!dealerCode) throw new Error("Dealer code is missing");
 
-      const formattedTimestamp = formatTimestamp();
-      // Ensure col17 is passed to formatDateToDDMMYYYY
-      const formattedLastDateOfCall = dealerData.col17
-        ? formatDateToDDMMYYYY(dealerData.col17)
-        : "";
-      const formattedNextCallDate = formData.nextCallDate
-        ? formatDateToDDMMYYYY(formData.nextCallDate)
-        : "";
+      const formattedTimestamp = new Date().toISOString();
+      const formattedLastDateOfCall = dealerData.col17 || null;
+      const formattedNextCallDate = formData.nextCallDate || null;
 
-      // const payload = {
-      //   sheetName: "Tracking History",
-      //   action: "insert",
-      //   rowData: JSON.stringify([
-      //     formattedTimestamp,
-      //     dealerCode,
-      //     formData.stage,
-      //     formData.status,
-      //     formattedLastDateOfCall,
+      // Conditional logic for customer feedback
+      const whatDidCustomerSay =
+        formData.stage === "Not Interested"
+          ? notInterestedReason
+          : formData.stage === "Payment Enquiry" && paymentCollection === "No"
+          ? whyNotCollection
+          : formData.customerFeedback;
 
-      //     formData.stage === "Not Interested"
-      //       ? notInterestedReason
-      //       : formData.stage === "Payment Collection" &&
-      //         paymentCollection === "No"
-      //       ? whyNotCollection
-      //       : formData.customerFeedback,
+      const nextDateOfCall =
+        formData.stage === "Payment Enquiry" && paymentCollection === "No"
+          ? nextCollectionDate
+          : formattedNextCallDate;
 
+      // Construct the Supabase insert object for tracking_history
+      const insertData = {
+        dealer_code: dealerCode || null,
+        stage: formData.stage || null,
+        status: formData.status || null,
+        last_date_of_call: formattedLastDateOfCall || null,
+        what_did_customer_says: whatDidCustomerSay || null,
+        next_action: formData.nextAction || null,
+        next_date_of_call: nextDateOfCall || null,
+        order_qty: formData.orderQty || null,
+        order_products: formData.orderedProducts || null,
+        value_of_order: formData.valueOfOrder || null,
+        sales_person_name: currentUser?.salesPersonName || "Unknown",
+        payment_yes_no: formData.stage === "Payment Enquiry" ? paymentCollection : null,
+        deler_distributer_site_name: dealerName || null,
+        area_name: areaName || null, // Add area_name to tracking_history
+      };
 
-      //     formData.nextAction, // G
-      //     // Column H - conditional data
-      //     formData.stage === "Payment Collection" && paymentCollection === "No"
-      //       ? nextCollectionDate
-      //       : formattedNextCallDate,
+      console.log("Inserting tracking data to Supabase:", insertData);
 
-      //     formData.customerFeedback,
-      //     formData.nextAction,
-      //     formattedNextCallDate,
-      //     formData.orderQty,
-      //     formData.orderedProducts,
-      //     formData.valueOfOrder,
+      // Insert into tracking_history table
+      const { data: trackingData, error: trackingError } = await supabase
+        .from("tracking_history")
+        .insert([insertData])
+        .select();
 
-      //     "", // L - empty
-      //     // Column M - conditional data
-      //     formData.stage === "Payment Collection" ? paymentCollection : "",
-      //   ]),
-      // };
+      if (trackingError) throw trackingError;
 
+      // Update FMS table with key columns only
+      const fmsUpdateData = {
+        stage: formData.stage || null,
+        status: formData.status || null,
+        what_did_the_customer_say: whatDidCustomerSay || null,
+        order_qty: formData.orderQty || null,
+        next_action: formData.nextAction || null,
+        order_products: formData.orderedProducts || null,
+        value_of_order: formData.valueOfOrder || null,
+        last_date_of_call: new Date(),
+        next_date_of_call: nextDateOfCall || null,
+        actual: formData.stage === "Not Interested" || formData.stage === "Order Closed"
+          ? new Date()
+          : null,
+        area_name: areaName || null, // Add area_name to FMS update
+      };
 
-      const payload = {
-  sheetName: "Tracking History",
-  action: "insert",
-  rowData: JSON.stringify([
-    formattedTimestamp, // A
-    dealerCode, // B
-    formData.stage, // C
-    formData.status, // D
-    formattedLastDateOfCall, // E
-    // Column F - conditional data
-    formData.stage === "Not Interested" ? notInterestedReason : 
-    (formData.stage === "Payment Collection" && paymentCollection === "No" ? whyNotCollection : formData.customerFeedback),
-    formData.nextAction, // G
-    // Column H - conditional data
-    formData.stage === "Payment Collection" && paymentCollection === "No" ? nextCollectionDate : formattedNextCallDate,
-    formData.orderQty, // I
-    formData.orderedProducts, // J
-    formData.valueOfOrder, // K
-    "", // L - empty
-    // Column M - conditional data
-    formData.stage === "Payment Collection" ? paymentCollection : "",
-  ]),
-};
+      console.log("Updating FMS table with data:", fmsUpdateData);
 
+      // Update FMS table using update instead of upsert
+      const { data: fmsData, error: fmsError } = await supabase
+        .from("FMS") // Replace with your actual FMS table name
+        .update(fmsUpdateData)
+        .eq('dc_dealer_code', dealerCode); // Update where dealer_code matches
 
-      const urlEncodedData = new URLSearchParams(payload);
-      const response = await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: urlEncodedData,
-        mode: "no-cors",
-      });
-
-      console.log("response from fetch:", response);
+      if (fmsError) throw fmsError;
 
       showToast(
         `Tracking data for ${dealerCode} recorded successfully!`,
         "success"
       );
 
-      // Close the dialog after a short delay to allow user to see the success message
       setTimeout(() => {
         onClose();
       }, 1000);
@@ -429,6 +433,8 @@ export default function TrackerDialog({
 
   if (!isOpen) return null;
 
+  const stageOptions = getStageOptions();
+
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -444,6 +450,18 @@ export default function TrackerDialog({
                     Dealer Code:{" "}
                     <span className="font-semibold text-green-600">
                       {dealerData.col1}
+                    </span>
+                  </p>
+                  <p className="text-lg text-slate-600">
+                    Entity Type:{" "}
+                    <span className="font-semibold text-blue-600">
+                      {entityType}
+                    </span>
+                  </p>
+                  <p className="text-lg text-slate-600">
+                    Area Name:{" "}
+                    <span className="font-semibold text-purple-600">
+                      {dealerData.supabase_data?.area_name || "N/A"}
                     </span>
                   </p>
                   <p className="text-lg text-slate-600">
@@ -514,7 +532,7 @@ export default function TrackerDialog({
                     required
                   >
                     <option value="">Select Stage</option>
-                    {stages.map((stage) => (
+                    {stageOptions.map((stage) => (
                       <option key={stage} value={stage}>
                         {stage}
                       </option>
@@ -525,6 +543,32 @@ export default function TrackerDialog({
                   )}
                 </div>
               </div>
+
+              {/* Sub-stage for Site/Engineer Order stages */}
+              {/* {subStageOptions.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Order Status *
+                  </label>
+                  <select
+                    name="subStage"
+                    value={formData.subStage || ""}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-md"
+                    required
+                  >
+                    <option value="">Select Order Status</option>
+                    {subStageOptions.map((subStage) => (
+                      <option key={subStage} value={subStage}>
+                        {subStage}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.subStage && (
+                    <p className="text-red-500 text-sm mt-1">{errors.subStage}</p>
+                  )}
+                </div>
+              )} */}
 
               {/* Not Interested Section */}
               {showNotInterestedSection && (
@@ -547,7 +591,7 @@ export default function TrackerDialog({
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Collection
+                      Enquiry
                     </label>
                     <select
                       value={paymentCollection}
@@ -599,6 +643,7 @@ export default function TrackerDialog({
                 </div>
               )}
 
+              {/* Rest of your existing form fields remain the same */}
               {fieldVisibility.showCustomerFeedback && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -735,12 +780,11 @@ export default function TrackerDialog({
         </div>
       </div>
 
-      {/* Centered Modal Popup - Same style as previous components */}
+      {/* Modal popup remains the same */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
             <div className="p-8 text-center">
-              {/* Icon */}
               <div className="mx-auto mb-6 w-20 h-20 rounded-full flex items-center justify-center">
                 {modalType === "success" ? (
                   <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
@@ -781,7 +825,6 @@ export default function TrackerDialog({
                 )}
               </div>
 
-              {/* Title */}
               <h2
                 className={`text-2xl font-bold mb-4 ${
                   modalType === "success" ? "text-green-600" : "text-red-600"
@@ -790,12 +833,10 @@ export default function TrackerDialog({
                 {modalType === "success" ? "Success!" : "Error!"}
               </h2>
 
-              {/* Message */}
               <p className="text-gray-600 text-lg mb-8 leading-relaxed">
                 {modalMessage}
               </p>
 
-              {/* OK Button */}
               <button
                 onClick={closeModal}
                 className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${

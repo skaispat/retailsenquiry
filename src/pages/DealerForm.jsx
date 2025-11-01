@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect, useContext, useRef } from "react"; // Added useRef
+import { useState, useEffect, useContext, useRef } from "react";
 import { format } from "date-fns";
-import { AuthContext } from "../App"; // Assuming App.js or similar defines it
+import { AuthContext } from "../App";
+import supabase from "../SupaabseClient";
 
 function DealerForm() {
   const [formData, setFormData] = useState({
     stateName: "",
     districtName: "",
+    areaName: "", // New field added
     salesPersonName: "",
     dealerName: "",
     aboutDealer: "",
@@ -16,13 +18,15 @@ function DealerForm() {
     avgQty: "",
     contactNumber: "",
     emailAddress: "",
-    dob: "", // Date of Birth
-    anniversary: "", // Anniversary Date
+    dob: "",
+    anniversary: "",
+    siteNature: "",
+    photo: null,
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modal states
+  // Modal states - only one modal for final result
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("success");
   const [modalMessage, setModalMessage] = useState("");
@@ -41,11 +45,17 @@ function DealerForm() {
   // State for custom sales person dropdown
   const [isSalesPersonDropdownOpen, setIsSalesPersonDropdownOpen] =
     useState(false);
-  const salesPersonDropdownRef = useRef(null); // Ref for clicking outside
+  const salesPersonDropdownRef = useRef(null);
+
+  // New state for location data and photo
+  const [photoLocation, setPhotoLocation] = useState(null);
+  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const fileInputRef = useRef(null); // Ref for file input to clear it
 
   // Access currentUser and userRole from AuthContext
   const { currentUser, isAuthenticated } = useContext(AuthContext);
-  const userRole = currentUser?.role || "User"; // Default to "User" if not available
+  const userRole = currentUser?.role || "User";
 
   const SPREADSHEET_ID_FOR_DEALER_SIZES =
     "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk";
@@ -53,11 +63,241 @@ function DealerForm() {
     "https://script.google.com/macros/s/AKfycby8tWRO5JWFmJmDECvf85x8baVHqXNfePy-w_tpk0ZL3lrby_M2Z9jNoRvlLokFIQ8/exec";
 
   const DEFAULT_DEALER_SIZES = ["Small", "Medium", "Large"];
+  
+  // Site Nature options for Site/Engineer
+  const SITE_NATURE_OPTIONS = [
+    "Individual House",
+    "Commercial",
+    "Residential",
+    "Other Project"
+  ];
 
   /**
-   * Shows centered modal popup with auto-hide functionality
-   * @param {string} message - The message to display.
-   * @param {'success' | 'error'} type - The type of modal (success or error).
+   * Get formatted address from coordinates using reverse geocoding
+   */
+  const getFormattedAddress = async (latitude, longitude) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+      );
+      const data = await response.json();
+      
+      if (data && data.display_name) {
+        return data.display_name;
+      }
+      return "Address not found";
+    } catch (error) {
+      console.error("Reverse geocoding error:", error);
+      return "Unable to retrieve address";
+    }
+  };
+
+  /**
+   * Get current location with detailed information
+   */
+  const getCurrentLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation is not supported by this browser"));
+        return;
+      }
+
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      };
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          const mapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+          const formattedAddress = await getFormattedAddress(latitude, longitude);
+
+          const locationInfo = {
+            latitude,
+            longitude,
+            mapLink,
+            formattedAddress,
+            timestamp: new Date().toISOString(),
+            accuracy: position.coords.accuracy,
+          };
+
+          resolve(locationInfo);
+        },
+        (error) => {
+          const errorMessages = {
+            1: "Location access denied. Please enable location services.",
+            2: "Location information is unavailable.",
+            3: "Location request timed out.",
+          };
+          reject(
+            new Error(errorMessages[error.code] || "An unknown error occurred.")
+          );
+        },
+        options
+      );
+    });
+  };
+
+  /**
+   * Add location watermark to image
+   */
+  const addLocationWatermark = (file, location) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // Draw original image
+        ctx.drawImage(img, 0, 0);
+        
+        // Add location watermark
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, canvas.height - 100, canvas.width - 20, 90);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'left';
+        
+        const locationText = [
+          `📍 ${location.formattedAddress}`,
+          `📱 Lat: ${location.latitude.toFixed(6)}, Lng: ${location.longitude.toFixed(6)}`,
+          `🕒 ${new Date(location.timestamp).toLocaleString()}`,
+          `🎯 Accuracy: ${Math.round(location.accuracy)}m`
+        ];
+        
+        locationText.forEach((text, index) => {
+          ctx.fillText(text, 20, canvas.height - 70 + (index * 20));
+        });
+
+        // Convert back to file
+        canvas.toBlob((blob) => {
+          const watermarkedFile = new File([blob], file.name, {
+            type: file.type,
+            lastModified: Date.now()
+          });
+          resolve(watermarkedFile);
+        }, file.type);
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  /**
+   * Process photo with location - This is the main function that coordinates the flow
+   */
+  const processPhotoWithLocation = async (file) => {
+    if (!file) return null;
+
+    try {
+      // Step 1: Show preview immediately
+      const previewUrl = URL.createObjectURL(file);
+      setPhotoPreview(previewUrl);
+      
+      // Step 2: Show location capture in progress (no modal, just status text)
+      setIsCapturingLocation(true);
+
+      // Step 3: Capture location
+      const location = await getCurrentLocation();
+      setPhotoLocation(location);
+      
+      // Step 4: Add location watermark to image
+      const processedImage = await addLocationWatermark(file, location);
+      
+      // Step 5: Update form data with processed image
+      setFormData(prev => ({
+        ...prev,
+        photo: processedImage
+      }));
+      
+      // Update preview with processed image
+      const processedPreviewUrl = URL.createObjectURL(processedImage);
+      setPhotoPreview(processedPreviewUrl);
+      
+      return { location, processedImage };
+      
+    } catch (error) {
+      console.error("Photo processing failed:", error);
+      setPhotoLocation(null);
+      
+      // If location fails, still keep the original photo
+      setFormData(prev => ({
+        ...prev,
+        photo: file
+      }));
+      return { location: null, processedImage: file };
+    } finally {
+      setIsCapturingLocation(false);
+    }
+  };
+
+  /**
+   * Handle file upload with location processing
+   */
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    
+    // Check if file is an image
+    if (!file.type.startsWith('image/')) {
+      // Only show error modal for invalid file type
+      showToast("❌ Please select an image file", "error");
+      return;
+    }
+    
+    await processPhotoWithLocation(file);
+  };
+
+  /**
+   * Uploads photo to Supabase storage
+   */
+  const uploadPhotoToSupabase = async (file) => {
+    if (!file) return null;
+
+    try {
+      // Create unique file name with timestamp
+      const fileExt = file.name.split('.').pop();
+      const timestamp = new Date().getTime();
+      const fileName = `${timestamp}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `site-engineer-photos/${fileName}`;
+
+      console.log("Uploading photo to Supabase storage...");
+
+      // Upload file to Supabase storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('image')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw new Error(`Photo upload failed: ${uploadError.message}`);
+      }
+
+      console.log("Photo uploaded successfully:", uploadData);
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('image')
+        .getPublicUrl(filePath);
+
+      console.log("Public URL generated:", publicUrl);
+
+      return publicUrl;
+
+    } catch (error) {
+      console.error("Photo upload error:", error);
+      throw error;
+    }
+  };
+
+  /**
+   * Shows centered modal popup - Only used for final results
    */
   const showToast = (message, type = "success") => {
     setModalMessage(message);
@@ -68,7 +308,7 @@ function DealerForm() {
     setTimeout(() => {
       setShowModal(false);
       setModalMessage("");
-    }, 2000);
+    }, 3000);
   };
 
   /**
@@ -80,15 +320,27 @@ function DealerForm() {
   };
 
   /**
+   * Reset photo related states and clear file input
+   */
+  const resetPhotoData = () => {
+    setPhotoPreview(null);
+    setPhotoLocation(null);
+    setFormData(prev => ({ ...prev, photo: null }));
+    
+    // Clear the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  /**
    * Fetches master data for dealer sizes from the specified Google Sheet.
-   * This data is used to populate the 'Dealer Size' dropdown.
    */
   const fetchMasterDataForDealerSizes = async () => {
     setIsLoadingDealerSizes(true);
     setErrorDealerSizes(null);
     try {
-      const MASTER_SHEET_NAME = "Master"; // Sheet name
-      // Query to select column A (Dealer Size). We will filter header and malformed data on client-side.
+      const MASTER_SHEET_NAME = "Master";
       const tq = encodeURIComponent("select A where A is not null");
 
       const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID_FOR_DEALER_SIZES}/gviz/tq?tqx=out:json&tq=${tq}&sheet=${MASTER_SHEET_NAME}`;
@@ -101,7 +353,6 @@ function DealerForm() {
         );
       const text = await response.text();
 
-      // Extract JSON part from the Google Visualization API response
       const jsonStart = text.indexOf("{");
       const jsonEnd = text.lastIndexOf("}");
       const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
@@ -110,30 +361,27 @@ function DealerForm() {
       if (data.table?.rows?.length > 0) {
         dealerSizes = data.table.rows
           .map((row) => {
-            const cell = row.c[0]; // A is the first column in the query result
-            // Ensure it's a string, trim, and then filter out known header or date patterns
+            const cell = row.c[0];
             const value = cell && cell.v !== null ? String(cell.v).trim() : "";
             return value;
           })
           .filter((size) => {
-            // Robustly filter out empty strings, the header, and any date-like strings
             const lowerCaseSize = size.toLowerCase();
             return (
               size &&
-              !["dealer size", "dealersize", "size"].includes(lowerCaseSize) && // Filter out header text variations
+              !["dealer size", "dealersize", "size"].includes(lowerCaseSize) &&
               !lowerCaseSize.startsWith("date(")
-            ); // Filter out "Date(year,month,day,...)" strings
+            );
           });
       }
 
-      const uniqueDealerSizes = Array.from(new Set(dealerSizes)); // Ensure unique sizes
+      const uniqueDealerSizes = Array.from(new Set(dealerSizes));
       setFetchedDealerSizes(
         uniqueDealerSizes.length > 0 ? uniqueDealerSizes : DEFAULT_DEALER_SIZES
       );
     } catch (err) {
       console.error(`Error fetching MASTER data for dealer sizes:`, err);
       setErrorDealerSizes(`Failed to load dealer sizes: ${err.message}`);
-      // Fallback to default dealer sizes on error
       setFetchedDealerSizes(DEFAULT_DEALER_SIZES);
     } finally {
       setIsLoadingDealerSizes(false);
@@ -144,9 +392,8 @@ function DealerForm() {
     setIsLoadingSalesPersons(true);
     setErrorSalesPersons(null);
     try {
-      const MASTER_SHEET_GID = "1319416673"; // GID for the master sheet
-      // Query to select column G. We will filter header and malformed data on client-side.
-      const tq = encodeURIComponent("select G where G is not null"); // Removed offset 1 as it was unreliable
+      const MASTER_SHEET_GID = "1319416673";
+      const tq = encodeURIComponent("select G where G is not null");
 
       const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID_FOR_DEALER_SIZES}/gviz/tq?tqx=out:json&tq=${tq}&gid=${MASTER_SHEET_GID}`;
 
@@ -158,7 +405,6 @@ function DealerForm() {
         );
       const text = await response.text();
 
-      // Extract JSON part from the Google Visualization API response
       const jsonStart = text.indexOf("{");
       const jsonEnd = text.lastIndexOf("}");
       const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
@@ -167,26 +413,24 @@ function DealerForm() {
       if (data.table?.rows?.length > 0) {
         salesPersons = data.table.rows
           .map((row) => {
-            const cell = row.c[0]; // G is the first column in the query result
-            // Ensure it's a string, trim, and then filter out known header or date patterns
+            const cell = row.c[0];
             const value = cell && cell.v !== null ? String(cell.v).trim() : "";
             return value;
           })
           .filter((name) => {
-            // Robustly filter out empty strings, the header, and any date-like strings
             const lowerCaseName = name.toLowerCase();
             return (
               name &&
-              lowerCaseName !== "salesperson name" && // Filter out specific header text
+              lowerCaseName !== "salesperson name" &&
               !lowerCaseName.startsWith("date(")
-            ); // Filter out "Date(year,month,day,...)" strings
+            );
           });
       }
-      setFetchedSalesPersons(Array.from(new Set(salesPersons))); // Ensure unique names
+      setFetchedSalesPersons(Array.from(new Set(salesPersons)));
     } catch (err) {
       console.error(`Error fetching sales persons data:`, err);
       setErrorSalesPersons(`Failed to load sales persons: ${err.message}`);
-      setFetchedSalesPersons([]); // Clear any previous data on error
+      setFetchedSalesPersons([]);
     } finally {
       setIsLoadingSalesPersons(false);
     }
@@ -198,17 +442,15 @@ function DealerForm() {
 
     if (isAuthenticated) {
       if (userRole === "User" && currentUser?.salesPersonName) {
-        // Auto-fill for 'User' role
         setFormData((prev) => ({
           ...prev,
           salesPersonName: currentUser.salesPersonName,
         }));
       } else if (userRole === "Admin") {
-        // Fetch sales persons for 'Admin' role dropdown
         fetchSalesPersons();
       }
     }
-  }, [isAuthenticated, userRole, currentUser]); // Dependencies for re-running effect
+  }, [isAuthenticated, userRole, currentUser]);
 
   // Effect for handling clicks outside the custom sales person dropdown
   useEffect(() => {
@@ -226,17 +468,33 @@ function DealerForm() {
     };
   }, [salesPersonDropdownRef]);
 
+  // Clean up photo preview URL when component unmounts or photo changes
+  useEffect(() => {
+    return () => {
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
+      }
+    };
+  }, [photoPreview]);
+
   /**
    * Handles changes to form input fields.
-   * @param {Event} e - The change event object.
    */
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, files } = e.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    if (type === 'file') {
+      const file = files[0];
+      if (file) {
+        handleFileUpload(file);
+      }
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+    
     // Clear error for the field if it was previously set
     if (errors[name]) {
       setErrors((prev) => ({
@@ -248,14 +506,13 @@ function DealerForm() {
 
   /**
    * Handles selection from the custom sales person dropdown.
-   * @param {string} name - The selected sales person name.
    */
   const handleSalesPersonSelect = (name) => {
     setFormData((prev) => ({
       ...prev,
       salesPersonName: name,
     }));
-    setIsSalesPersonDropdownOpen(false); // Close dropdown after selection
+    setIsSalesPersonDropdownOpen(false);
     if (errors.salesPersonName) {
       setErrors((prev) => ({
         ...prev,
@@ -266,13 +523,10 @@ function DealerForm() {
 
   /**
    * Validates the form data before submission.
-   * Only validates Dealer Name and Contact Number as required fields.
-   * @returns {boolean} - True if the form is valid, false otherwise.
    */
   const validateForm = () => {
     const newErrors = {};
 
-    // Only validate Dealer Name and Contact Number as required fields
     if (!formData.dealerName.trim() || formData.dealerName.length < 2) {
       newErrors.dealerName = "Dealer name must be at least 2 characters";
     }
@@ -285,100 +539,77 @@ function DealerForm() {
   };
 
   /**
-   * Submits the form data to Google Sheets via Google Apps Script.
-   * @param {string} sheetName - The name of the target sheet.
-   * @param {Array<string>} rowData - An array of data to be inserted as a row.
-   * @returns {Promise<Object>} - The result of the submission.
-   */
-  const submitToGoogleSheets = async (sheetName, rowData) => {
-    try {
-      const formDataToSend = new FormData();
-      formDataToSend.append("sheetName", sheetName);
-      formDataToSend.append("action", "insertWithDealerCode");
-      formDataToSend.append("rowData", JSON.stringify(rowData));
-
-      const response = await fetch(APPS_SCRIPT_URL_FOR_SUBMISSION, {
-        method: "POST",
-        body: formDataToSend,
-        mode: "no-cors", // Use 'no-cors' for Google Apps Script to avoid CORS issues
-      });
-
-      console.log("response from fetch:", response);
-
-      // In 'no-cors' mode, response.ok is always true and response.json() is not available.
-      // We assume success if the request was sent without network errors.
-      if (response.type === "opaque") {
-        console.log("Request sent with no-cors mode. Assuming success.");
-        return { success: true };
-      }
-
-      // If not opaque, try to parse JSON (e.g., if CORS is configured or for debugging)
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || "Failed to submit to Google Sheets");
-      }
-      return result;
-    } catch (error) {
-      console.error("Google Sheets submission error:", error);
-      throw error;
-    }
-  };
-
-  /**
    * Handles the form submission.
-   * @param {Event} e - The form submission event object.
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) {
-      showToast("Please correct the errors in the form.", "error");
+      showToast("❌ Please correct the errors in the form.", "error");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Format timestamp, DOB, and Anniversary dates
-      const timestamp = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+      const date = new Date().toISOString();
+
       const formattedDob = formData.dob
-        ? format(new Date(formData.dob), "yyyy-MM-dd")
-        : "";
+        ? new Date(formData.dob).toISOString()
+        : null;
       const formattedAnniversary = formData.anniversary
-        ? format(new Date(formData.anniversary), "yyyy-MM-dd")
-        : "";
+        ? new Date(formData.anniversary).toISOString()
+        : null;
 
-      // IMPORTANT: Keep original column structure - dealer code column (B) will be empty
-      const rowData = [
-        timestamp, // Column A
-        "", // Column B - Empty dealer code to maintain column structure
-        formData.stateName, // Column C
-        formData.districtName, // Column D
-        formData.salesPersonName, // Column E
-        formData.dealerName, // Column F
-        formData.aboutDealer, // Column G
-        formData.address, // Column H
-        formData.dealerSize, // Column I
-        formData.avgQty, // Column J
-        formData.contactNumber, // Column K
-        formData.emailAddress, // Column L
-        formattedDob, // Column M
-        formattedAnniversary, // Column N
+      // Upload photo and get URL (for Site/Engineer only)
+      let photoUrl = null;
 
-        ...Array(19).fill(""),
-        entityType,
-      ];
+      if (formData.photo && entityType === "Site/Engineer") {
+        photoUrl = await uploadPhotoToSupabase(formData.photo);
+        console.log("Photo uploaded successfully:", photoUrl);
+      }
 
-      const targetSheetName = "FMS"; // Target sheet name
+      // Supabase insert data object
+      const insertData = {
+        state_name: formData.stateName,
+        district_name: formData.districtName,
+        area_name: formData.areaName, // New field added
+        sales_person_name: formData.salesPersonName,
+        dealer_name: formData.dealerName,
+        about_dealer: formData.aboutDealer,
+        address: formData.address,
+        contact_number: formData.contactNumber,
+        email_address: formData.emailAddress,
+        planned: date,
+        // Store image URL in image_url column
+        image_url: photoUrl || null,
+        dealer_size: formData.dealerSize || formData.siteNature, 
+        avg_qty: formData.avgQty,
+        select_value:entityType,
+        // Conditional fields based on entity type
+        ...(entityType !== "Site/Engineer" && {
+          date_of_birth: formattedDob,
+          anniversary: formattedAnniversary,
+        }),
+      };
 
-      console.log("Submitting data to Google Sheet:", rowData);
-      await submitToGoogleSheets(targetSheetName, rowData);
+      console.log("Submitting data to Supabase:", insertData);
+      
+      // Supabase insert call
+      const { data, error } = await supabase
+        .from('FMS')
+        .insert([insertData])
+        .select();
 
-      showToast("Dealer registered successfully!");
+      if (error) {
+        throw error;
+      }
+
+      showToast(`✅ ${entityType} registered successfully!`);
 
       // Reset form data after successful submission
       setFormData({
         stateName: "",
         districtName: "",
-        // Keep salesPersonName auto-filled if user is 'User'
+        areaName: "", // Reset new field
         salesPersonName:
           userRole === "User" && currentUser?.salesPersonName
             ? currentUser.salesPersonName
@@ -392,15 +623,24 @@ function DealerForm() {
         emailAddress: "",
         dob: "",
         anniversary: "",
+        siteNature: "",
+        photo: null,
       });
-      setErrors({}); // Clear validation errors
+      
+      // Reset photo data and clear file input
+      resetPhotoData();
+      setErrors({});
+      
     } catch (error) {
       console.error("Submission error:", error);
-      showToast(`Error submitting form: ${error.message}`, "error");
+      showToast(`❌ Error submitting form: ${error.message}`, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Helper function to check if entity type is Site/Engineer
+  const isSiteEngineer = entityType === "Site/Engineer";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 p-0 lg:p-8 font-inter">
@@ -430,12 +670,12 @@ function DealerForm() {
               </select>
             </div>
           </div>
-          <div className=" p-2 lg:p-8">
+          <div className="p-2 lg:p-8">
             {entityType && (
               <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Location Information */}
                 <div className="space-y-6">
-                  <div className="grid gap-6 md:grid-cols-2">
+                  <div className="grid gap-6 md:grid-cols-3">
                     <div className="space-y-2">
                       <label className="block text-sm font-semibold text-slate-700 mb-3">
                         State Name
@@ -470,6 +710,26 @@ function DealerForm() {
                       {errors.districtName && (
                         <p className="text-red-500 text-sm mt-2 font-medium">
                           {errors.districtName}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* New Area Name Field */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-slate-700 mb-3">
+                        Area Name
+                      </label>
+                      <input
+                        type="text"
+                        name="areaName"
+                        value={formData.areaName}
+                        onChange={handleInputChange}
+                        placeholder="Enter area name"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                      />
+                      {errors.areaName && (
+                        <p className="text-red-500 text-sm mt-2 font-medium">
+                          {errors.areaName}
                         </p>
                       )}
                     </div>
@@ -627,48 +887,82 @@ function DealerForm() {
                         </p>
                       )}
                     </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-slate-700 mb-3">
-                        Date Of Birth
-                      </label>
-                      <input
-                        type="date"
-                        name="dob"
-                        value={formData.dob}
-                        onChange={handleInputChange}
-                        placeholder="Date Of Birth"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
-                      />
-                      {errors.dob && (
-                        <p className="text-red-500 text-sm mt-2 font-medium">
-                          {errors.dob}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-slate-700 mb-3">
-                        Anniversary
-                      </label>
-                      <input
-                        type="date"
-                        name="anniversary"
-                        value={formData.anniversary}
-                        onChange={handleInputChange}
-                        placeholder="Anniversary Date"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
-                      />
-                      {errors.anniversary && (
-                        <p className="text-red-500 text-sm mt-2 font-medium">
-                          {errors.anniversary}
-                        </p>
-                      )}
-                    </div>
+                    
+                    {/* Conditionally render Date of Birth and Anniversary for non-Site/Engineer */}
+                    {!isSiteEngineer && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="block text-sm font-semibold text-slate-700 mb-3">
+                            Date Of Birth
+                          </label>
+                          <input
+                            type="date"
+                            name="dob"
+                            value={formData.dob}
+                            onChange={handleInputChange}
+                            placeholder="Date Of Birth"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                          />
+                          {errors.dob && (
+                            <p className="text-red-500 text-sm mt-2 font-medium">
+                              {errors.dob}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-sm font-semibold text-slate-700 mb-3">
+                            Anniversary
+                          </label>
+                          <input
+                            type="date"
+                            name="anniversary"
+                            value={formData.anniversary}
+                            onChange={handleInputChange}
+                            placeholder="Anniversary Date"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                          />
+                          {errors.anniversary && (
+                            <p className="text-red-500 text-sm mt-2 font-medium">
+                              {errors.anniversary}
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    
+                    {/* Show Site Nature for Site/Engineer */}
+                    {isSiteEngineer && (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-slate-700 mb-3">
+                          Site Nature
+                        </label>
+                        <select
+                          name="siteNature"
+                          value={formData.siteNature}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                        >
+                          <option value="">Select Site Nature</option>
+                          {SITE_NATURE_OPTIONS.map((nature) => (
+                            <option key={nature} value={nature}>
+                              {nature}
+                            </option>
+                          ))}
+                        </select>
+                        {errors.siteNature && (
+                          <p className="text-red-500 text-sm mt-2 font-medium">
+                            {errors.siteNature}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Business Information */}
                 <div className="space-y-6">
                   <div className="space-y-6">
+                    {/* About Dealer and Address Section */}
                     <div className="grid gap-6 md:grid-cols-2">
                       <div className="space-y-2">
                         <label className="block text-sm font-semibold text-slate-700 mb-3">
@@ -678,7 +972,7 @@ function DealerForm() {
                           name="aboutDealer"
                           value={formData.aboutDealer}
                           onChange={handleInputChange}
-                          placeholder="Enter information about the dealer"
+                          placeholder={`Enter information about the ${entityType.toLowerCase()}`}
                           className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium min-h-24 resize-none"
                         />
                         {errors.aboutDealer && (
@@ -696,7 +990,7 @@ function DealerForm() {
                           name="address"
                           value={formData.address}
                           onChange={handleInputChange}
-                          placeholder="Enter dealer address"
+                          placeholder={`Enter ${entityType.toLowerCase()} address`}
                           className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium min-h-24 resize-none"
                         />
                         {errors.address && (
@@ -706,59 +1000,159 @@ function DealerForm() {
                         )}
                       </div>
                     </div>
-                    <div className="grid gap-6 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="block text-sm font-semibold text-slate-700 mb-3">
-                          {entityType} Size
-                        </label>
-                        <select
-                          name="dealerSize"
-                          value={formData.dealerSize}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
-                          disabled={isLoadingDealerSizes}
-                        >
-                          <option value="">
-                            {isLoadingDealerSizes
-                              ? "Loading dealer sizes..."
-                              : "Select dealer size"}
-                          </option>
-                          {fetchedDealerSizes.map((size) => (
-                            <option key={size} value={size}>
-                              {size}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.dealerSize && (
-                          <p className="text-red-500 text-sm mt-2 font-medium">
-                            {errors.dealerSize}
-                          </p>
-                        )}
-                        {errorDealerSizes && (
-                          <p className="text-red-500 text-sm mt-2 font-medium">
-                            {errorDealerSizes}
-                          </p>
-                        )}
-                      </div>
 
-                      <div className="space-y-2">
-                        <label className="block text-sm font-semibold text-slate-700 mb-3">
-                          Average Quantity
-                        </label>
-                        <input
-                          type="number"
-                          name="avgQty"
-                          value={formData.avgQty}
-                          onChange={handleInputChange}
-                          placeholder="Enter average quantity"
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
-                        />
-                        {errors.avgQty && (
-                          <p className="text-red-500 text-sm mt-2 font-medium">
-                            {errors.avgQty}
-                          </p>
-                        )}
-                      </div>
+                    {/* Dealer Size and Average Quantity Section */}
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {/* Dealer Size - only for non-Site/Engineer */}
+                      {!isSiteEngineer && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-semibold text-slate-700 mb-3">
+                            {entityType} Size
+                          </label>
+                          <select
+                            name="dealerSize"
+                            value={formData.dealerSize}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                            disabled={isLoadingDealerSizes}
+                          >
+                            <option value="">
+                              {isLoadingDealerSizes
+                                ? "Loading dealer sizes..."
+                                : "Select dealer size"}
+                            </option>
+                            {fetchedDealerSizes.map((size) => (
+                              <option key={size} value={size}>
+                                {size}
+                              </option>
+                            ))}
+                          </select>
+                          {errors.dealerSize && (
+                            <p className="text-red-500 text-sm mt-2 font-medium">
+                              {errors.dealerSize}
+                            </p>
+                          )}
+                          {errorDealerSizes && (
+                            <p className="text-red-500 text-sm mt-2 font-medium">
+                              {errorDealerSizes}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Site Engineer View: Upload + Average Quantity in one row */}
+                      {isSiteEngineer ? (
+                        <div className="flex flex-col md:flex-row gap-6 md:col-span-2">
+                          {/* Upload Photo Section */}
+                          <div className="w-full space-y-2">
+                            <label className="block text-sm font-semibold text-slate-700 mb-3">
+                              Upload Photo (with Location Capture)
+                            </label>
+                            
+                            {/* Photo Preview */}
+                            {photoPreview && (
+                              <div className="mb-4 p-4 bg-green-50 rounded-xl border border-green-200">
+                                <p className="text-green-700 font-medium mb-2">
+                                  {photoLocation ? "✅ Photo with Location Watermark" : "📷 Photo Ready for Processing"}
+                                </p>
+                                <img 
+                                  src={photoPreview} 
+                                  alt="Preview" 
+                                  className="w-full h-48 object-contain rounded-lg bg-gray-100"
+                                  onError={(e) => {
+                                    console.error("Error loading image preview");
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={resetPhotoData}
+                                  className="mt-2 text-red-500 text-sm hover:text-red-700"
+                                >
+                                  Remove Photo
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Upload Input */}
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              name="photo"
+                              onChange={handleInputChange}
+                              accept="image/*"
+                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                              disabled={isCapturingLocation}
+                            />
+
+                            {isCapturingLocation && (
+                              <p className="text-blue-600 text-sm mt-2">
+                                📍 Capturing location and processing image...
+                              </p>
+                            )}
+
+                            {photoLocation && (
+                              <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                                <p className="text-green-700 text-sm font-medium mb-1">
+                                  ✅ Location captured and image processed!
+                                </p>
+                                <p className="text-green-600 text-xs">
+                                  Address: {photoLocation.formattedAddress}
+                                </p>
+                                <p className="text-green-600 text-xs">
+                                  Coordinates: {photoLocation.latitude.toFixed(6)}, {photoLocation.longitude.toFixed(6)}
+                                </p>
+                              </div>
+                            )}
+
+                            {errors.photo && (
+                              <p className="text-red-500 text-sm mt-2 font-medium">
+                                {errors.photo}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Average Quantity beside photo */}
+                          <div className="w-full space-y-2">
+                            <label className="block text-sm font-semibold text-slate-700 mb-3">
+                              Average Quantity
+                            </label>
+                            <input
+                              type="number"
+                              name="avgQty"
+                              value={formData.avgQty}
+                              onChange={handleInputChange}
+                              placeholder="Enter average quantity"
+                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                            />
+                            {errors.avgQty && (
+                              <p className="text-red-500 text-sm mt-2 font-medium">
+                                {errors.avgQty}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        // Non-Site Engineer — Average Quantity separate field
+                        <div className="space-y-2">
+                          <label className="block text-sm font-semibold text-slate-700 mb-3">
+                            Average Quantity
+                          </label>
+                          <input
+                            type="number"
+                            name="avgQty"
+                            value={formData.avgQty}
+                            onChange={handleInputChange}
+                            placeholder="Enter average quantity"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                          />
+                          {errors.avgQty && (
+                            <p className="text-red-500 text-sm mt-2 font-medium">
+                              {errors.avgQty}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -770,17 +1164,19 @@ function DealerForm() {
                     disabled={
                       isSubmitting ||
                       (userRole === "Admin" && isLoadingSalesPersons) ||
-                      isLoadingDealerSizes
+                      isLoadingDealerSizes ||
+                      isCapturingLocation
                     }
                     className={`w-full lg:w-auto bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 hover:from-purple-700 hover:via-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] ${
                       isSubmitting ||
                       (userRole === "Admin" && isLoadingSalesPersons) ||
-                      isLoadingDealerSizes
+                      isLoadingDealerSizes ||
+                      isCapturingLocation
                         ? "opacity-50 cursor-not-allowed"
                         : ""
                     }`}
                   >
-                    {isSubmitting ? "Registering Dealer..." : "Register Dealer"}
+                    {isSubmitting ? `Registering ${entityType}...` : `Register ${entityType}`}
                   </button>
                 </div>
               </form>
@@ -797,7 +1193,7 @@ function DealerForm() {
         </div>
       </div>
 
-      {/* Centered Modal Popup - Light transparent background */}
+      {/* Centered Modal Popup - Only shows on submit result */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">

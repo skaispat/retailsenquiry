@@ -1,10 +1,10 @@
-
 "use client";
 
 import { useState, useEffect, useContext } from "react"; // Import useContext
 import { toast, Toaster } from "react-hot-toast";
 import { Download, Filter, Search, X } from "lucide-react";
 import { AuthContext } from "../App"; // Assuming AuthContext is defined in App.js or a similar path
+import supabase from "../SupaabseClient";
 
 const History = () => {
   const [indents, setIndents] = useState([]);
@@ -25,180 +25,64 @@ const History = () => {
   const currentUserSalesPersonName = currentUser?.salesPersonName || "Unknown User";
   const userRole = currentUser?.role || "User"; // Default to "User" if role is not defined
 
-  // --- Constants and Utility Functions (from previous version, assuming they are robust) ---
-  const SPREADSHEET_ID = "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk";
-  const SHEET_NAME = "Tracking History";
-  // Added column 11 (L) for Sales Person Name to DISPLAY_COLUMNS
-  const DISPLAY_COLUMNS = [11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Columns L, B to K (0-indexed as 11, 1-10)
-
-  const COLUMN_MAPPINGS = {
-    "Name": "col11", // Added Sales Person Name from Column L
-    "Dealer Code": "col1",
-    "Stage": "col2",
-    "Status": "col3",
-    "Last Date Of Call": "col4",
-    "What Did The Customer Say": "col5",
-    "Next Action": "col6",
-    "Next Date Of Call": "col7",
-    "Order Qty": "col8",
-    "Ordered Products": "col9",
-    "Value Of Order": "col10"
-  };
-
-  const formatDate = (dateValue) => {
-    if (!dateValue) return "—";
-    try {
-      let date;
-      if (typeof dateValue === 'string' && dateValue.startsWith('Date(')) {
-        const match = dateValue.match(/Date\((\d{4}),(\d{1,2}),(\d{1,2})\)/);
-        if (match) {
-          const year = parseInt(match[1]);
-          const month = parseInt(match[2]);
-          const day = parseInt(match[3]);
-          date = new Date(year, month, day);
-        }
-      } else if (dateValue instanceof Date) {
-        date = dateValue;
-      } else if (typeof dateValue === 'number' && dateValue > 0) {
-        const excelEpoch = new Date(1899, 11, 30);
-        date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000);
-      } else if (typeof dateValue === 'string') {
-        date = new Date(dateValue);
-        if (isNaN(date.getTime())) {
-          const ddmmyyyy = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-          if (ddmmyyyy) {
-            date = new Date(ddmmyyyy[3], ddmmyyyy[2] - 1, ddmmyyyy[1]);
-          } else {
-            const mmddyyyy = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-            if (mmddyyyy) {
-              date = new Date(mmddyyyy[3], mmddyyyy[1] - 1, mmddyyyy[2]);
-            }
-          }
-        }
-      } else {
-        return dateValue;
-      }
-      if (!date || isNaN(date.getTime())) {
-        return dateValue;
-      }
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
-    } catch (error) {
-      console.error('Date formatting error:', error, 'Original value:', dateValue);
-      return dateValue;
-    }
-  };
-
-  const isDateValue = (value, headerLabel = '') => {
-    if (!value) return false;
-    const headerLower = headerLabel.toLowerCase();
-    const isDateHeader = headerLower.includes('date') || headerLower.includes('time') || headerLower.includes('created') || headerLower.includes('updated') || headerLower.includes('modified');
-    if (isDateHeader) return true;
-    if (typeof value === 'number' && value > 40000 && value < 60000) {
-      return true;
-    }
-    if (typeof value === 'string') {
-      const datePatterns = [
-        /^\d{4}-\d{2}-\d{2}/,
-        /^\d{2}\/\d{2}\/\d{4}/,
-        /^\d{1,2}\/\d{1,2}\/\d{4}/,
-        /Date\(\d{4},\d{1,2},\d{1,2}\)/
-      ];
-      return datePatterns.some(pattern => pattern.test(value));
-    }
-    return false;
-  };
-
-  const formatCellValue = (value, headerLabel = '') => {
-    if (isDateValue(value, headerLabel)) {
-      return formatDate(value);
-    }
-    return value || "—";
-  };
-  // --- End Constants and Utility Functions ---
-
   const fetchData = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Only proceed if authenticated
       if (!isAuthenticated) {
         console.log("Not authenticated. Skipping data fetch for History.");
         setIsLoading(false);
         return;
       }
 
-      console.log(`🔄 Fetching data from ${SHEET_NAME} sheet...`);
+      console.log("🔄 Fetching data from Supabase: tracking_history...");
 
-      const response = await fetch(
-        `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`
-      );
+      const { data, error } = await supabase
+        .from("tracking_history")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data: ${response.status}`);
-      }
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) throw new Error("No data found in Supabase table");
 
-      const text = await response.text();
-      const jsonStart = text.indexOf("{");
-      const jsonEnd = text.lastIndexOf("}");
+      console.log("✅ tracking_history data loaded successfully from Supabase");
 
-      if (jsonStart === -1 || jsonEnd === -1) {
-        throw new Error("Invalid response format from sheet");
-      }
+      // Define column mapping for display - Added Area Name
+      const COLUMN_MAPPINGS = {
+        "Timestamp": "created_at",
+        "Dealer Code": "dealer_code",
+        "Stage": "stage",
+        "Status": "status",
+        "Last Date of Call": "last_date_of_call",
+        "What Did Customer Say": "what_did_customer_says",
+        "Next Action": "next_action",
+        "Next Date of Call": "next_date_of_call",
+        "Order Qty": "order_qty",
+        "Order Products": "order_products",
+        "Value of Order": "value_of_order",
+        "Sales Person Name": "sales_person_name",
+        "Payment (Yes/No)": "payment_yes_no",
+        "Dealer/Distributor Site": "deler_distributer_site_name",
+        "Area Name": "area_name", // New Area Name column
+      };
 
-      const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
-
-      if (!data.table || !data.table.rows) {
-        throw new Error("No table data found in sheet");
-      }
-
-      console.log(`✅ ${SHEET_NAME} data loaded successfully`);
-
-      const headers = Object.keys(COLUMN_MAPPINGS).map(label => ({
+      const headers = Object.keys(COLUMN_MAPPINGS).map((label) => ({
         id: COLUMN_MAPPINGS[label],
-        label
+        label,
       }));
-
-      // Ensure headers are sorted according to DISPLAY_COLUMNS order
-      headers.sort((a, b) => {
-        const aColIndex = parseInt(a.id.replace('col', ''));
-        const bColIndex = parseInt(b.id.replace('col', ''));
-        return DISPLAY_COLUMNS.indexOf(aColIndex) - DISPLAY_COLUMNS.indexOf(bColIndex);
-      });
 
       setSheetHeaders(headers);
 
-      const items = data.table.rows.map((row, rowIndex) => {
-        const itemObj = {
-          _id: `${rowIndex}-${Math.random().toString(36).substr(2, 9)}`,
-          _rowIndex: rowIndex + 1,
-        };
+      const items = data.map((row, index) => ({
+        _id: `${index}-${Math.random().toString(36).substr(2, 9)}`,
+        _rowIndex: index + 1,
+        ...row, // directly spread Supabase row data
+      }));
 
-        if (row.c) {
-          row.c.forEach((cell, i) => {
-            // Include all DISPLAY_COLUMNS in the item object, even if not displayed initially
-            // This ensures filter functionality can access raw values
-            const cellValue = cell?.v ?? cell?.f ?? "";
-            const headerLabel = headers.find(h => h.id === `col${i}`)?.label;
-            itemObj[`col${i}`] = formatCellValue(cellValue, headerLabel);
-          });
-        }
-        return itemObj;
-      });
-
-      const filteredItems = items.filter((item) => {
-        return DISPLAY_COLUMNS.some((colIndex) => {
-          const value = item[`col${colIndex}`];
-          return value && String(value).trim() !== "";
-        });
-      });
-
-      setIndents(filteredItems);
+      setIndents(items);
     } catch (err) {
-      console.error(`❌ Error fetching ${SHEET_NAME} data:`, err);
+      console.error("❌ Error fetching tracking_history data:", err);
       setError(err.message);
       toast.error(`Failed to load data: ${err.message}`, {
         duration: 4000,
@@ -207,6 +91,94 @@ const History = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Improved date formatting function to handle all date formats
+  const formatDateToDDMMYYYY = (dateValue) => {
+    if (!dateValue) return "—";
+    
+    try {
+      let date;
+      
+      // Handle string dates
+      if (typeof dateValue === 'string') {
+        // Handle ISO format (from Supabase)
+        if (dateValue.includes('T')) {
+          date = new Date(dateValue);
+        }
+        // Handle DD/MM/YYYY format
+        else if (dateValue.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+          const [day, month, year] = dateValue.split('/');
+          date = new Date(year, month - 1, day);
+        }
+        // Handle YYYY-MM-DD format
+        else if (dateValue.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
+          date = new Date(dateValue);
+        }
+        // Handle Google Sheets Date format
+        else if (dateValue.startsWith('Date(')) {
+          const match = dateValue.match(/Date\((\d{4}),(\d{1,2}),(\d{1,2})\)/);
+          if (match) {
+            const year = parseInt(match[1]);
+            const month = parseInt(match[2]);
+            const day = parseInt(match[3]);
+            date = new Date(year, month, day);
+          } else {
+            date = new Date(dateValue);
+          }
+        }
+        // Fallback to Date constructor
+        else {
+          date = new Date(dateValue);
+        }
+      }
+      // Handle number dates (Excel serial numbers)
+      else if (typeof dateValue === 'number' && dateValue > 0) {
+        const excelEpoch = new Date(1899, 11, 30);
+        date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000);
+      }
+      // Handle Date objects
+      else if (dateValue instanceof Date) {
+        date = dateValue;
+      }
+      // Return original value if can't parse
+      else {
+        return dateValue;
+      }
+
+      // Check if date is valid
+      if (!date || isNaN(date.getTime())) {
+        console.warn('Invalid date value:', dateValue);
+        return dateValue;
+      }
+
+      // Format to DD/MM/YYYY
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      
+      return `${day}/${month}/${year}`;
+      
+    } catch (error) {
+      console.error('Date formatting error:', error, 'Original value:', dateValue);
+      return dateValue;
+    }
+  };
+
+  // Function to check if a value should be formatted as date
+  const isDateColumn = (headerLabel) => {
+    const dateKeywords = ['date', 'time', 'created', 'updated', 'modified', 'call'];
+    return dateKeywords.some(keyword => 
+      headerLabel.toLowerCase().includes(keyword)
+    );
+  };
+
+  // Function to format cell value based on header type
+  const formatCellValue = (value, headerLabel) => {
+    if (isDateColumn(headerLabel) && value) {
+      return formatDateToDDMMYYYY(value);
+    }
+    return value || "—";
   };
 
   useEffect(() => {
@@ -222,20 +194,18 @@ const History = () => {
 
   const filteredIndents = indents.filter((item) => {
     const term = searchTerm.toLowerCase();
-    // Assuming col1 is 'Dealer Code' and col2 is 'Stage' based on COLUMN_MAPPINGS
-    // And col11 is 'Name' (Sales Person Name)
-    const dealerCodeVal = String(item.col1 || "").toLowerCase();
-    const stageVal = String(item.col2 || "").toLowerCase();
-    const salesPersonVal = String(item.col11 || "").toLowerCase(); // Sales Person Name
+    const dealerCodeVal = String(item.dealer_code || "").toLowerCase();
+    const stageVal = String(item.stage || "").toLowerCase();
+    const salesPersonVal = String(item.sales_person_name || "").toLowerCase();
 
     // User-specific filter for regular users
     // If userRole is "Admin", this condition is always true.
-    // If userRole is "User", it checks if the Sales Person Name (col11) matches the current user's name.
+    // If userRole is "User", it checks if the Sales Person Name matches the current user's name.
     const matchesUserSalesPerson = userRole.toLowerCase() === "admin" ||
       (salesPersonVal === currentUserSalesPersonName.toLowerCase());
 
-    const matchesSearchTerm = DISPLAY_COLUMNS.some((colIndex) => {
-      const value = item[`col${colIndex}`];
+    const matchesSearchTerm = sheetHeaders.some((header) => {
+      const value = item[header.id];
       return value && String(value).toLowerCase().includes(term);
     });
 
@@ -257,7 +227,11 @@ const History = () => {
         ...filteredIndents.map((item) =>
           sheetHeaders
             .map((header) => {
-              const value = item[header.id] || "";
+              let value = item[header.id] || "";
+              // Format dates in export as well
+              if (isDateColumn(header.label) && value) {
+                value = formatDateToDDMMYYYY(value);
+              }
               return typeof value === "string" &&
                 (value.includes(",") || value.includes('"'))
                 ? `"${value.replace(/"/g, '""')}"`
@@ -488,7 +462,7 @@ const History = () => {
                             key={header.id}
                             className="px-6 py-4 whitespace-nowrap text-sm text-gray-800"
                           >
-                            {item[header.id] || "—"}
+                            {formatCellValue(item[header.id], header.label)}
                           </td>
                         ))}
                       </tr>
@@ -528,7 +502,7 @@ const History = () => {
                         {header.label}
                       </span>
                       <span className="text-base font-semibold text-gray-900 break-words">
-                        {value || "—"}
+                        {formatCellValue(value, header.label)}
                       </span>
                     </div>
                   );

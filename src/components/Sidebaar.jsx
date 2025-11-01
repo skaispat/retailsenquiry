@@ -12,6 +12,7 @@ import {
   LogOut,
   User,
   CheckSquare,
+  Shield,
 } from "lucide-react";
 import { AuthContext } from "../App"; 
 
@@ -21,6 +22,9 @@ function Sidebar({ userType, username, tabs = [] }) {
   const { logout } = useContext(AuthContext);
 
   const cn = (...classes) => classes.filter(Boolean).join(" ");
+
+  // Check if user is admin (case-insensitive)
+  const isAdmin = userType?.toLowerCase() === "admin";
 
   const availableRoutes = [
     { label: "Dashboard", icon: Home, href: "/", color: "text-sky-500" },
@@ -59,6 +63,13 @@ function Sidebar({ userType, username, tabs = [] }) {
       icon: CheckSquare,
       href: "/daily-report",
       color: "text-teal-500",
+    },
+   {
+      label: "Admin Logs",
+      icon: Shield,
+      href: "/admin-logs",
+      color: "text-red-500",
+      adminOnly: true
     },
   ];
 
@@ -125,7 +136,8 @@ function Sidebar({ userType, username, tabs = [] }) {
                 "focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white/60",
                 location.pathname === route.href
                   ? "bg-white shadow-md text-slate-900 border border-slate-200/50"
-                  : "text-slate-600 hover:text-slate-900"
+                  : "text-slate-600 hover:text-slate-900",
+                route.adminOnly ? "border-l-4 border-l-red-400" : ""
               )}
               title={route.label}
             >
@@ -137,8 +149,16 @@ function Sidebar({ userType, username, tabs = [] }) {
                 )}
               />
               <span className="truncate">{route.label}</span>
-              {location.pathname === route.href && (
+              {route.adminOnly && (
+                <span className="ml-auto text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full font-medium">
+                  Admin
+                </span>
+              )}
+              {location.pathname === route.href && !route.adminOnly && (
                 <div className="ml-auto w-2 h-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full" />
+              )}
+              {location.pathname === route.href && route.adminOnly && (
+                <div className="ml-auto w-2 h-2 bg-red-500 rounded-full" />
               )}
             </Link>
           ))}
@@ -148,14 +168,24 @@ function Sidebar({ userType, username, tabs = [] }) {
         <div className="mt-auto px-4 pb-6 pt-4 border-t border-slate-200/50 bg-white/30 space-y-2">
           {/* User Info */}
           <div className="flex items-center gap-3 px-3.5 py-2.5 bg-white/60 rounded-lg shadow-sm">
-            <div className="flex items-center justify-center w-9 h-9 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full">
+            <div className={cn(
+              "flex items-center justify-center w-9 h-9 rounded-full",
+              isAdmin 
+                ? "bg-gradient-to-r from-red-500 to-orange-500" 
+                : "bg-gradient-to-r from-purple-500 to-blue-500"
+            )}>
               <User className="h-4.5 w-4.5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">
                 {username || 'User'}
               </p>
-              <p className="text-xs text-slate-500 capitalize">{userType || 'user'}</p>
+              <p className="text-xs text-slate-500 capitalize flex items-center gap-1">
+                {userType || 'user'}
+                {isAdmin && (
+                  <Shield className="h-3 w-3 text-red-500" />
+                )}
+              </p>
             </div>
           </div>
 

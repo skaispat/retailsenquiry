@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, createContext } from "react";
@@ -14,117 +13,348 @@ import History from "./pages/History";
 import Tracker from "./pages/Tracker";
 import Reports from "./pages/Reports";
 import Login from "./pages/Login";
-import Attendance from "./pages/Attendents"; // Corrected typo here, assuming it's "Attendance" in file path
+import Attendance from "./pages/Attendents";
 import Sidebar from "./components/Sidebaar";
 import DailyReport from "./pages/Dailyreport";
+import AdminLogs from "./pages/AdminLogs";
+import supabase from "./SupaabseClient";
 
 export const AuthContext = createContext(null);
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [notification, setNotification] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null); // This will store all user info
-  const [userType, setUserType] = useState(null); // This is essentially currentUser.role
-  const [tabs, setTabs] = useState([]); // State to hold the tabs preference
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userType, setUserType] = useState(null);
+  const [tabs, setTabs] = useState([]);
+  const [autoLogoutTimer, setAutoLogoutTimer] = useState(null);
+  const [hasLoggedInitialActivity, setHasLoggedInitialActivity] = useState(false);
 
-  // Spreadsheet ID for Google Sheets data
-  const SPREADSHEET_ID = "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk"; // Your Tracker's Spreadsheet ID
+  // Helper function for case-insensitive admin check
+  const isAdminUser = (role) => {
+    return role?.toLowerCase() === "admin";
+  };
 
   useEffect(() => {
     const auth = localStorage.getItem("isAuthenticated");
-    const storedUser = localStorage.getItem("currentUser"); // Corrected potential typo in key
-    const storedUserType = localStorage.getItem("userType"); // This is currentUser.role
+    const storedUser = localStorage.getItem("currentUser");
+    const storedUserType = localStorage.getItem("userType");
 
     if (auth === "true" && storedUser) {
       const parsedUser = JSON.parse(storedUser);
-      setIsAuthenticated(true);
-      setCurrentUser(parsedUser);
-      setUserType(storedUserType); // Still keep userType for simplicity if used elsewhere
-      setTabs(parsedUser.tabs || []); // Set tabs from stored user data
+      
+      // For admin users, skip the access check (case-insensitive)
+      if (isAdminUser(parsedUser.role)) {
+        setIsAuthenticated(true);
+        setCurrentUser(parsedUser);
+        setUserType(parsedUser.role);
+        setTabs(parsedUser.tabs || []);
+        
+        // Don't log login activity here - only log during actual login
+        // Don't setup auto logout for admin users
+      } else {
+        // For regular users, check if they are allowed to login today
+        checkLoginAccess(parsedUser.username).then((canLogin) => {
+          if (canLogin) {
+            setIsAuthenticated(true);
+            setCurrentUser(parsedUser);
+            setUserType(parsedUser.role);
+            setTabs(parsedUser.tabs || []);
+            
+            // Don't log login activity here - only log during actual login
+            
+            // Setup auto logout at 9 PM
+            setupAutoLogout();
+          } else {
+            // Clear storage if access denied
+            localStorage.clear();
+            showNotification("Your access is denied for today. Please request access from admin.", "error");
+          }
+        });
+      }
     }
   }, []);
 
-  const login = async (username, password) => {
+  // Function to check if user can login today (only for regular users)
+  const checkLoginAccess = async (username) => {
     try {
-      // You are already fetching from the Master sheet for login
-      // Username is Column H (index 7), Password is Column I (index 8)
-      // Admin/Role is Column J (index 9)
-      // Sales Person Name is Column D (index 3)
-      const masterSheetUrl =
-        `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Master`;
-      const response = await fetch(masterSheetUrl);
-      const text = await response.text();
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Check if user already logged in today and logged out
+      const { data, error } = await supabase
+        .from('user_logs')
+        .select('*')
+        .eq('user_name', username)
+        .eq('login_date', today)
+        .order('login_time', { ascending: false })
+        .limit(1);
 
-      const jsonStart = text.indexOf("{");
-      const jsonEnd = text.lastIndexOf("}") + 1;
-      const jsonData = text.substring(jsonStart, jsonEnd);
-      const data = JSON.parse(jsonData);
+      if (error) {
+        console.error("Error checking login access:", error);
+        return true; // Allow login if there's an error checking
+      }
 
-      if (!data?.table?.rows) {
-        showNotification("Failed to fetch user data from Master sheet.", "error");
+      // If user has a logout time for today, deny access
+      if (data && data.length > 0 && data[0].logout_time) {
         return false;
       }
 
-      const rows = data.table.rows;
+      return true;
+    } catch (error) {
+      console.error("Error in checkLoginAccess:", error);
+      return true;
+    }
+  };
 
-      // console.log("rows:", rows);
-      
-      // Check for username and password in columns H (index 7) and I (index 8)
-      const foundUserRow = rows.find(
-        (row) => row.c?.[7]?.v === username && row.c?.[8]?.v === password
-      );
+  // Function to log user activity - ONLY call this during actual login/logout
+  const logUserActivity = async (username, action) => {
+    try {
+      const now = new Date();
+      const loginDate = now.toISOString().split('T')[0];
+      const loginTime = now.toTimeString().split(' ')[0];
 
-      if (foundUserRow) {
-        const userInfo = {
-          username: username,
-          // Assuming Column J (index 9) is 'Admin' for role
-          role: foundUserRow.c?.[9]?.v || "user",
-          // Assuming Column G (index 6) is 'Sales Person Name'
-          salesPersonName: foundUserRow.c?.[6]?.v || "Unknown Sales Person",
-          loginTime: new Date().toISOString(),
-          tabs:
-            foundUserRow.c?.[10]?.v === "all"
-              ? [
-                  "Dashboard",
-                  "Dealer Form",
-                  "Tracker",
-                  "History",
-                  "Reports",
-                  "Attendance",
-                  "Daily Report",
-                ]
-              : (foundUserRow.c?.[10]?.v || "").split(",").map((t) => t.trim()).filter(Boolean), // Split by comma, trim spaces, filter empty strings
-        };
+      if (action === 'login') {
+        // Check if there's already an active session for today
+        const { data: existingSessions, error: checkError } = await supabase
+          .from('user_logs')
+          .select('*')
+          .eq('user_name', username)
+          .eq('login_date', loginDate)
+          .is('logout_time', null)
+          .order('login_time', { ascending: false })
+          .limit(1);
 
-        setIsAuthenticated(true);
-        setCurrentUser(userInfo);
-        setUserType(userInfo.role); // Set userType state from userInfo.role
-        setTabs(userInfo.tabs); // Set tabs from user info
+        if (checkError) {
+          console.error("Error checking existing sessions:", checkError);
+          return;
+        }
 
-        // Store currentUser as a single JSON object in localStorage
-        localStorage.setItem("isAuthenticated", "true");
-        localStorage.setItem("currentUser", JSON.stringify(userInfo)); // Store all relevant user data
-        localStorage.setItem("userType", userInfo.role); // Still store userType separately for backward compatibility if needed
+        // If there's already an active session, don't create a new one
+        if (existingSessions && existingSessions.length > 0) {
+          console.log("Active session already exists, not creating new login entry");
+          return;
+        }
 
-        showNotification(`Welcome, ${username}!`, "success");
-        return true;
-      } else {
-        showNotification("Invalid username or password", "error");
-        return false;
+        // Insert new login record only if no active session exists
+        const { error } = await supabase
+          .from('user_logs')
+          .insert([
+            {
+              user_name: username,
+              login_date: loginDate,
+              login_time: loginTime,
+              logout_time: null,
+              access_requested: false
+            }
+          ]);
+
+        if (error) {
+          console.error("Error logging login activity:", error);
+        } else {
+          console.log("Login activity logged successfully");
+        }
+      } else if (action === 'logout') {
+        // Update the latest login record with logout time
+        const { error } = await supabase
+          .from('user_logs')
+          .update({ 
+            logout_time: now.toTimeString().split(' ')[0]
+          })
+          .eq('user_name', username)
+          .eq('login_date', loginDate)
+          .is('logout_time', null)
+          .order('login_time', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error("Error logging logout activity:", error);
+        } else {
+          console.log("Logout activity logged successfully");
+        }
       }
     } catch (error) {
-      console.error("Login error:", error);
-      showNotification("An error occurred during login", "error");
+      console.error("Error in logUserActivity:", error);
+    }
+  };
+
+  // Function to setup auto logout at 9 PM (only for regular users)
+  const setupAutoLogout = () => {
+    // Don't setup auto logout for admin users
+    if (isAdminUser(currentUser?.role)) {
+      return;
+    }
+
+    const now = new Date();
+    const ninePM = new Date();
+    ninePM.setHours(21, 0, 0, 0); // 9:00 PM
+
+    let timeUntilLogout;
+    
+    if (now > ninePM) {
+      // If it's already past 9 PM, logout immediately
+      timeUntilLogout = 0;
+    } else {
+      // Calculate time until 9 PM
+      timeUntilLogout = ninePM - now;
+    }
+
+    // Clear existing timer
+    if (autoLogoutTimer) {
+      clearTimeout(autoLogoutTimer);
+    }
+
+    const timer = setTimeout(() => {
+      showNotification("Auto logout: Session ended at 9:00 PM", "info");
+      handleAutoLogout();
+    }, timeUntilLogout);
+
+    setAutoLogoutTimer(timer);
+  };
+
+  // Function to handle auto logout
+  const handleAutoLogout = () => {
+    if (currentUser) {
+      logUserActivity(currentUser.username, 'logout');
+    }
+    
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setUserType(null);
+    setTabs([]);
+    localStorage.clear();
+    
+    if (autoLogoutTimer) {
+      clearTimeout(autoLogoutTimer);
+      setAutoLogoutTimer(null);
+    }
+  };
+
+  // Function to request access (only for regular users)
+  const requestAccess = async (username) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { error } = await supabase
+        .from('user_logs')
+        .update({ 
+          access_requested: true,
+          request_time: new Date().toTimeString().split(' ')[0]
+        })
+        .eq('user_name', username)
+        .eq('login_date', today)
+        .order('login_time', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error("Error requesting access:", error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error in requestAccess:", error);
       return false;
     }
   };
 
+  const login = async (username, password) => {
+    try {
+      // Query the master table in Supabase
+      const { data, error } = await supabase
+        .from('master')
+        .select('*')
+        .eq('user_name', username)
+        .eq('password', password)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          showNotification("Invalid username or password", "error");
+          return { success: false, accessDenied: false };
+        }
+        throw new Error(`Supabase error: ${error.message}`);
+      }
+
+      if (data) {
+        const userIsAdmin = isAdminUser(data.role);
+        
+        // For regular users, check if they can login today
+        if (!userIsAdmin) {
+          const canLogin = await checkLoginAccess(username);
+          if (!canLogin) {
+            showNotification("Your access is denied for today. Please request access from admin.", "error");
+            return { success: false, accessDenied: true };
+          }
+        }
+
+        const userInfo = {
+          username: data.user_name,
+          role: data.role || "user",
+          salesPersonName: data.sales_person_name || "Unknown Sales Person",
+          loginTime: new Date().toISOString(),
+          tabs: data.access === "all" 
+            ? [
+                "Dashboard",
+                "Dealer Form",
+                "Tracker",
+                "History",
+                "Reports",
+                "Attendance",
+                "Daily Report",
+                ...(userIsAdmin ? ["Admin Logs"] : [])
+              ]
+            : (data.access || "").split(",").map((t) => t.trim()).filter(Boolean),
+        };
+
+        setIsAuthenticated(true);
+        setCurrentUser(userInfo);
+        setUserType(userInfo.role);
+        setTabs(userInfo.tabs);
+
+        // Store in localStorage
+        localStorage.setItem("isAuthenticated", "true");
+        localStorage.setItem("currentUser", JSON.stringify(userInfo));
+        localStorage.setItem("userType", userInfo.role);
+
+        // Log login activity ONLY HERE - during actual login
+        await logUserActivity(username, 'login');
+
+        // Setup auto logout (only for regular users)
+        if (!userIsAdmin) {
+          setupAutoLogout();
+        }
+
+        showNotification(`Welcome, ${username}!`, "success");
+        return { success: true, accessDenied: false };
+      } else {
+        showNotification("Invalid username or password", "error");
+        return { success: false, accessDenied: false };
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      showNotification("An error occurred during login", "error");
+      return { success: false, accessDenied: false };
+    }
+  };
+
   const logout = () => {
+    // Log logout activity (for all users) - ONLY HERE during actual logout
+    if (currentUser) {
+      logUserActivity(currentUser.username, 'logout');
+    }
+
     setIsAuthenticated(false);
     setCurrentUser(null);
     setUserType(null);
-    setTabs([]); // Reset tabs on logout
-    localStorage.clear(); // Clear all localStorage items on logout
+    setTabs([]);
+    localStorage.clear();
+    
+    // Clear auto logout timer
+    if (autoLogoutTimer) {
+      clearTimeout(autoLogoutTimer);
+      setAutoLogoutTimer(null);
+    }
+    
     showNotification("Logged out successfully", "success");
   };
 
@@ -133,7 +363,7 @@ const App = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const isAdmin = () => userType === "admin"; // Check if userType is 'admin'
+  const isAdmin = () => isAdminUser(userType);
 
   const ProtectedRoute = ({ children, adminOnly = false }) => {
     if (!isAuthenticated) return <Navigate to="/login" />;
@@ -153,11 +383,12 @@ const App = () => {
         isAuthenticated,
         login,
         logout,
-        currentUser, // Provide currentUser object
-        userType, // Still provide userType for compatibility
+        currentUser,
+        userType,
         isAdmin,
         showNotification,
-        tabs, // Provide tabs to context
+        tabs,
+        requestAccess,
       }}
     >
       <Router>
@@ -255,6 +486,14 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <DailyReport />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin-logs"
+                    element={
+                      <ProtectedRoute adminOnly={true}>
+                        <AdminLogs />
                       </ProtectedRoute>
                     }
                   />

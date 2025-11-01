@@ -4,6 +4,7 @@ import { useState, useEffect, useContext } from "react";
 import { MapPin, Loader2 } from "lucide-react";
 import AttendanceHistory from "../components/AttendanceHistory";
 import { AuthContext } from "../App";
+import supabase from "../SupaabseClient";
 
 const Attendance = () => {
   const [attendance, setAttendance] = useState([]);
@@ -12,21 +13,17 @@ const Attendance = () => {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [errors, setErrors] = useState({});
   const [locationData, setLocationData] = useState(null);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true); // New state for history loading
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   // Modal states
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState("success"); // "success" or "error"
+  const [modalType, setModalType] = useState("success");
   const [modalMessage, setModalMessage] = useState("");
 
   const { currentUser, isAuthenticated } = useContext(AuthContext);
 
   const salesPersonName = currentUser?.salesPersonName || "Unknown User";
   const userRole = currentUser?.role || "User";
-
-  const SPREADSHEET_ID = "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk"; // Your Tracker's Spreadsheet ID
-  const APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycby8tWRO5JWFmJmDECvf85x8baVHqXNfePy-w_tpk0ZL3lrby_M2Z9jNoRvlLokFIQ8/exec";
 
   const formatDateInput = (date) => {
     return date.toISOString().split("T")[0];
@@ -70,15 +67,12 @@ const Attendance = () => {
 
   /**
    * Shows centered modal popup with auto-hide functionality
-   * @param {string} message - The message to display.
-   * @param {'success' | 'error'} type - The type of modal (success or error).
    */
   const showToast = (message, type = "success") => {
     setModalMessage(message);
     setModalType(type);
     setShowModal(true);
 
-    // Auto-hide after 3 seconds
     setTimeout(() => {
       setShowModal(false);
       setModalMessage("");
@@ -128,7 +122,6 @@ const Attendance = () => {
         async (position) => {
           const latitude = position.coords.latitude;
           const longitude = position.coords.longitude;
-          // Corrected mapLink format - ensure it's valid for Google Maps
           const mapLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
 
           const formattedAddress = await getFormattedAddress(
@@ -137,8 +130,8 @@ const Attendance = () => {
           );
 
           const locationInfo = {
-            latitude,
-            longitude,
+            latitude: latitude.toString(),
+            longitude: longitude.toString(),
             mapLink,
             formattedAddress,
             timestamp: new Date().toISOString(),
@@ -183,89 +176,44 @@ const Attendance = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Fetch attendance history from Supabase
   const fetchAttendanceHistory = async () => {
     if (!isAuthenticated || !currentUser) {
-      console.log(
-        "Not authenticated or currentUser not available. Skipping history fetch."
-      );
+      console.log("Not authenticated or currentUser not available. Skipping history fetch.");
       setIsLoadingHistory(false);
       return;
     }
 
     setIsLoadingHistory(true);
     try {
-      const attendanceSheetUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Attendance`;
-      const response = await fetch(attendanceSheetUrl);
-      const text = await response.text();
+      // Fetch all attendance records
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .order('date_and_time', { ascending: false });
 
-      const jsonStart = text.indexOf("{");
-      const jsonEnd = text.lastIndexOf("}") + 1;
-      const jsonData = text.substring(jsonStart, jsonEnd);
-      const data = JSON.parse(jsonData);
-
-      if (!data?.table?.rows) {
-        console.warn("No rows found in Attendance sheet.");
-        setAttendance([]);
-        setIsLoadingHistory(false);
-        return;
+      if (error) {
+        throw new Error(`Supabase error: ${error.message}`);
       }
 
-      const rows = data.table.rows;
+      console.log("✅ Attendance data loaded successfully from Supabase");
 
-      const formattedHistory = rows
-        .map((row) => {
-          const salesPerson = row.c?.[9]?.v; // Column J
-          let dateTime = row.c?.[1]?.v; // Column B (This is the formatted date from Apps Script)
-          let originalTimestamp = row.c?.[0]?.v; // Column A (Apps Script timestamp)
+      // Format the data for display
+      const formattedHistory = data.map((item) => {
+        return {
+          salesPersonName: item.sales_person_name,
+          dateTime: formatDateTime(new Date(item.date_and_time)),
+          status: item.status,
+          mapLink: item.map_link || "#",
+          address: item.address || "Location not available",
+          _originalTimestamp: item.date_and_time,
+          reason: item.reason || "",
+          start_date: item.start_date ? formatDateTime(new Date(item.start_date)) : "",
+          end_date: item.end_date ? formatDateTime(new Date(item.end_date)) : "",
+        };
+      });
 
-          // Fix: Parse Google Visualization Date string correctly from original timestamp (Column A)
-          // This ensures the date parsing logic is consistent and avoids issues if Column B isn't
-          // always a `Date(...)` string.
-          if (
-            typeof originalTimestamp === "string" &&
-            originalTimestamp.startsWith("Date(") &&
-            originalTimestamp.endsWith(")")
-          ) {
-            try {
-              const dateParts = originalTimestamp
-                .substring(5, originalTimestamp.length - 1)
-                .split(",");
-              const year = parseInt(dateParts[0], 10);
-              const month = parseInt(dateParts[1], 10); // This month is 0-indexed (0=Jan, 6=Jul) from gviz
-              const day = parseInt(dateParts[2], 10);
-              const hour = dateParts[3] ? parseInt(dateParts[3], 10) : 0;
-              const minute = dateParts[4] ? parseInt(dateParts[4], 10) : 0;
-              const second = dateParts[5] ? parseInt(dateParts[5], 10) : 0;
-
-              // Fix: Removed + 1 from month. Month is already 0-indexed by Google Sheets Date()
-              const dateObj = new Date(year, month, day, hour, minute, second);
-              dateTime = formatDateTime(dateObj); // Format for display
-            } catch (e) {
-              console.error(
-                "Error parsing original timestamp date string:",
-                originalTimestamp,
-                e
-              );
-              // Fallback to raw value if parsing fails
-              dateTime = originalTimestamp; // Use original string if parsing fails
-            }
-          }
-
-          const status = row.c?.[3]?.v; // Column D
-          const mapLink = row.c?.[7]?.v; // Column H
-          const address = row.c?.[8]?.v; // Column I
-
-          return {
-            salesPersonName: salesPerson,
-            dateTime: dateTime, // This is now the correctly formatted string for display
-            status: status,
-            mapLink: mapLink,
-            address: address,
-            _originalTimestamp: originalTimestamp, // Keep original for sorting if needed
-          };
-        })
-        .filter(Boolean);
-
+      // Filter based on user role
       const filteredHistory =
         userRole === "Admin"
           ? formattedHistory
@@ -273,71 +221,19 @@ const Attendance = () => {
               (entry) => entry.salesPersonName === salesPersonName
             );
 
-      filteredHistory.sort((a, b) => {
-        // Parse the Gviz Date() string from _originalTimestamp for accurate sorting
-        const parseGvizDate = (dateString) => {
-          if (
-            typeof dateString === "string" &&
-            dateString.startsWith("Date(") &&
-            dateString.endsWith(")")
-          ) {
-            const dateParts = dateString
-              .substring(5, dateString.length - 1)
-              .split(",");
-            const year = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10);
-            const day = parseInt(dateParts[2], 10);
-            const hour = dateParts[3] ? parseInt(dateParts[3], 10) : 0;
-            const minute = dateParts[4] ? parseInt(dateParts[4], 10) : 0;
-            const second = dateParts[5] ? parseInt(dateParts[5], 10) : 0;
-            return new Date(year, month, day, hour, minute, second);
-          }
-          return new Date(dateString); // Fallback for other formats
-        };
-        const dateA = parseGvizDate(a._originalTimestamp);
-        const dateB = parseGvizDate(b._originalTimestamp);
-        return dateB.getTime() - dateA.getTime();
-      });
-
       setAttendance(filteredHistory);
 
-
-      
+      // Filter for today's attendance data
+      const today = formatDateDDMMYYYY(new Date());
       const filteredHistoryData = formattedHistory.filter(
         (entry) =>
           entry.salesPersonName === salesPersonName &&
-        entry.dateTime?.split(" ")[0].toString() ===
-        formatDateDDMMYYYY(new Date())
+          entry.dateTime?.split(" ")[0].toString() === today
       );
-      console.log("filteredHistoryData:", filteredHistoryData);
 
-      filteredHistoryData.sort((a, b) => {
-        // Parse the Gviz Date() string from _originalTimestamp for accurate sorting
-        const parseGvizDate = (dateString) => {
-          if (
-            typeof dateString === "string" &&
-            dateString.startsWith("Date(") &&
-            dateString.endsWith(")")
-          ) {
-            const dateParts = dateString
-              .substring(5, dateString.length - 1)
-              .split(",");
-            const year = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10);
-            const day = parseInt(dateParts[2], 10);
-            const hour = dateParts[3] ? parseInt(dateParts[3], 10) : 0;
-            const minute = dateParts[4] ? parseInt(dateParts[4], 10) : 0;
-            const second = dateParts[5] ? parseInt(dateParts[5], 10) : 0;
-            return new Date(year, month, day, hour, minute, second);
-          }
-          return new Date(dateString); // Fallback for other formats
-        };
-        const dateA = parseGvizDate(a._originalTimestamp);
-        const dateB = parseGvizDate(b._originalTimestamp);
-        return dateB.getTime() - dateA.getTime();
-      });
-
+      console.log("Today's attendance data:", filteredHistoryData);
       setAttendanceData(filteredHistoryData);
+
     } catch (error) {
       console.error("Error fetching attendance history:", error);
       showToast("Failed to load attendance history.", "error");
@@ -348,8 +244,9 @@ const Attendance = () => {
 
   useEffect(() => {
     fetchAttendanceHistory();
-  }, [currentUser, isAuthenticated]); // Refetch when currentUser or isAuthenticated changes
+  }, [currentUser, isAuthenticated]);
 
+  // Submit attendance to Supabase
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("Submit button clicked!");
@@ -363,68 +260,30 @@ const Attendance = () => {
       showToast("User data not loaded. Please try logging in again.", "error");
       return;
     }
-    
 
-    console.log("attendanceData:", attendanceData);
+    console.log("Today's attendance data:", attendanceData);
 
+    // Check for duplicate IN/OUT entries for today
     if (formData?.status === "IN") {
       const indata = attendanceData.filter((item) => item.status === "IN");
       if (indata.length > 0) {
-        showToast("Today Already in", "error");
+        showToast("Already marked IN for today", "error");
         return;
       }
     }
 
-    // console.log("ram ram out",outData);
     if (formData?.status === "OUT") {
-      // console.log("inData",inData)
-      // console.log("outData",outData)
-
       const indata = attendanceData.filter((item) => item.status === "IN");
       const outdata = attendanceData.filter((item) => item.status === "OUT");
       if (indata.length === 0) {
-        showToast("First In", "error");
+        showToast("Please mark IN first before marking OUT", "error");
         return;
       }
-
-      // if((outData.dateTime?.split(' ')[0].toString() === formatDateDDMMYYYY(new Date()).toString())){
-      //   showToast("Today Already out", "error");
-      // return;
-      // }
       if (outdata.length > 0) {
-        showToast("Today Already out", "error");
+        showToast("Already marked OUT for today", "error");
         return;
       }
     }
-
-    // --- FIX: Logic for 'OUT' status verification ---
-    // if (formData.status === "OUT") {
-    //   const today = new Date();
-    //   const todayFormattedForComparison = formatDateDDMMYYYY(today); // e.g., "11/07/2025"
-
-    //   const hasClockedInToday = attendance.some((record) => {
-    //     // Extract the date part (DD/MM/YYYY) from the record's dateTime
-    //     const recordDatePart = record.dateTime
-    //       ? record.dateTime.split(" ")[0]
-    //       : "";
-    //     return (
-    //       record.salesPersonName === salesPersonName &&
-    //       record.status === "IN" &&
-    //       recordDatePart === todayFormattedForComparison
-    //     );
-    //   });
-
-    //   if (!hasClockedInToday) {
-    //     showToast(
-    //       "You must clock IN before you can clock OUT on the same day.",
-    //       "error"
-    //     );
-    //     setIsSubmitting(false);
-    //     setIsGettingLocation(false);
-    //     return; // Prevent submission
-    //   }
-    // }
-    // --- END 'OUT' STATUS VERIFICATION ---
 
     setIsSubmitting(true);
     setIsGettingLocation(true);
@@ -445,65 +304,50 @@ const Attendance = () => {
       setIsGettingLocation(false);
 
       const currentDate = new Date();
-      const timestamp = formatDateTime(currentDate); // Full timestamp for Column A
-      const dateForAttendance =
-        formData.status === "IN" || formData.status === "OUT"
-          ? formatDateTime(currentDate) // Full date and time for IN/OUT
-          : formData.startDate
-          ? formatDateDDMMYYYY(new Date(formData.startDate + "T00:00:00")) // DD/MM/YYYY for Leave start
-          : "";
-
-      const endDateForLeave = formData.endDate
-        ? formatDateDDMMYYYY(new Date(formData.endDate + "T00:00:00")) // DD/MM/YYYY for Leave end
-        : "";
-
-      let rowData = Array(10).fill(""); // Columns A-J
-
-      // FIX: Set Column A (Timestamp)
-      rowData[0] = timestamp; // Column A - Timestamp (Current submission time)
-      rowData[1] = dateForAttendance; // Column B - Date (or Start Date for Leave)
-      rowData[3] = formData.status; // Column D - Status
-      rowData[5] = currentLocation.latitude; // Column F - Latitude
-      rowData[6] = currentLocation.longitude; // Column G - Longitude
-      rowData[7] = currentLocation.mapLink; // Column H - Map Link
-      rowData[8] = currentLocation.formattedAddress; // Column I - Address
-      rowData[9] = salesPersonName; // Column J - Sales Person Name (from AuthContext)
-
-      if (formData.status === "Leave") {
-        rowData[4] = formData.reason; // Column E for Reason
-        rowData[2] = endDateForLeave; // Column C for End Date
-      }
-
-      console.log("Row data to be submitted:", rowData);
-
-      const payload = {
-        sheetName: "Attendance",
-        action: "insert",
-        rowData: JSON.stringify(rowData),
+      
+      // Prepare data for Supabase according to your schema
+      const attendanceRecord = {
+        date_and_time: currentDate.toISOString(),
+        sales_person_name: salesPersonName,
+        status: formData.status,
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        map_link: currentLocation.mapLink,
+        address: currentLocation.formattedAddress,
       };
 
-      const urlEncodedData = new URLSearchParams(payload);
+      // Add leave-specific fields if applicable
+      if (formData.status === "Leave") {
+        attendanceRecord.start_date = new Date(formData.startDate + "T00:00:00").toISOString();
+        attendanceRecord.end_date = formData.endDate ? new Date(formData.endDate + "T00:00:00").toISOString() : null;
+        attendanceRecord.reason = formData.reason;
+      }
 
-      const response = await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: urlEncodedData,
-        mode: "no-cors",
-      });
+      console.log("Attendance record to be submitted:", attendanceRecord);
+
+      // Insert into Supabase
+      const { data, error } = await supabase
+        .from('attendance')
+        .insert([attendanceRecord])
+        .select();
+
+      if (error) {
+        throw new Error(`Supabase insert error: ${error.message}`);
+      }
 
       showToast(`Your ${formData.status} has been recorded successfully!`);
 
       // After successful submission, refetch history to update the list
       await fetchAttendanceHistory();
 
+      // Reset form
       setFormData({
         status: "",
         startDate: formatDateInput(new Date()),
         endDate: "",
         reason: "",
       });
+
     } catch (error) {
       console.error("Submission error:", error);
       showToast(
@@ -558,6 +402,9 @@ const Attendance = () => {
             </h3>
             <p className="text-emerald-50 text-lg">
               Record your daily attendance or apply for leave
+            </p>
+            <p className="text-orange-100 text-sm mt-2">
+              Current User: <span className="font-semibold">{salesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
             </p>
           </div>
 
@@ -707,12 +554,11 @@ const Attendance = () => {
         </div>
       </div>
 
-      {/* Centered Modal Popup - Light transparent background */}
+      {/* Centered Modal Popup */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
             <div className="p-8 text-center">
-              {/* Icon */}
               <div className="mx-auto mb-6 w-20 h-20 rounded-full flex items-center justify-center">
                 {modalType === "success" ? (
                   <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
@@ -753,7 +599,6 @@ const Attendance = () => {
                 )}
               </div>
 
-              {/* Title */}
               <h2
                 className={`text-2xl font-bold mb-4 ${
                   modalType === "success" ? "text-green-600" : "text-red-600"
@@ -762,12 +607,10 @@ const Attendance = () => {
                 {modalType === "success" ? "Success!" : "Error!"}
               </h2>
 
-              {/* Message */}
               <p className="text-gray-600 text-lg mb-8 leading-relaxed">
                 {modalMessage}
               </p>
 
-              {/* OK Button */}
               <button
                 onClick={closeModal}
                 className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${
