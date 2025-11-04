@@ -3,6 +3,7 @@
 import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from '../App';
+import logo from '../../public/logo.jpeg';
 
 function Login() {
   const [username, setUsername] = useState("");
@@ -32,7 +33,7 @@ function Login() {
         navigate("/");
       } else if (result.accessDenied) {
         setShowAccessRequest(true);
-        setError("Your access is denied for today. Please request access from admin.");
+        setError("You have already logged out today. Please request access from admin to login again.");
       } else {
         setError("Invalid username or password");
       }
@@ -81,16 +82,25 @@ function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <h1 className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 transition-all duration-300 mb-2">
-            Leads To Retail EMS
-          </h1>
-          <p className="text-slate-600">Sign in to access your dashboard</p>
+          <div className="flex flex-col items-center justify-center space-y-4">
+            {/* Title */}
+            <h1 className="font-bold text-transparent text-2xl bg-clip-text bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 transition-all duration-300">
+              Leads To Retail EMS
+            </h1>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
+          <div className="p-6 ">
+            <div className="flex items-center justify-center">
+              <img 
+                src={logo} 
+                alt="Leads To Retail EMS Logo" 
+                className="h-18 w-40 mb-3 object-cover"
+              />
+            </div>
             <h2 className="text-2xl font-bold mb-6 text-center">
-              {showAccessRequest ? "Access Request" : "Login"}
+              {showAccessRequest ? "Access Request" : ""}
             </h2>
 
             {error && (
@@ -153,7 +163,7 @@ function Login() {
                 </button>
               </form>
             ) : (
-              // Access Request Section (Only for regular users)
+              // Access Request Section (Only for regular users who logged out before 9 hours)
               <div className="space-y-4">
                 {!accessRequested ? (
                   <>
@@ -227,16 +237,10 @@ function Login() {
                 )}
               </div>
             )}
-
-            {!showAccessRequest && (
-              <div className="mt-4 text-center text-sm text-gray-600">
-                <p>Authenticate with your credentials from the Login sheet</p>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Information Box - Only show for regular users */}
+        {/* Information Box */}
         {!showAccessRequest && (
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start">
@@ -245,7 +249,7 @@ function Login() {
               </svg>
               <div>
                 <p className="text-blue-800 text-sm">
-                  <strong>Note for Users:</strong> Regular users can only login once per day. If you've already logged out today, 
+                  <strong>Note for Users:</strong> Regular users can login once per day. If you logout before completing 9 hours, 
                   you'll need to request access from the administrator to login again. <strong>Admin users have unlimited access.</strong>
                 </p>
               </div>

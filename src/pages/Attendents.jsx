@@ -423,10 +423,10 @@ const Attendance = () => {
             <h3 className="text-2xl font-bold text-white mb-2">
               Mark Attendance
             </h3>
-            <p className="text-emerald-50 text-lg">
+            <p className="text-emerald-50 text-lg hidden md:block">
               Record your daily attendance or apply for leave
             </p>
-            <p className="text-orange-100 text-sm mt-2">
+            <p className="text-orange-100 text-sm mt-2 hidden md:block">
               Current User: <span className="font-semibold">{salesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
             </p>
           </div>

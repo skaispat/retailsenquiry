@@ -30,6 +30,7 @@ const App = () => {
   const [tabs, setTabs] = useState([]);
   const [autoLogoutTimer, setAutoLogoutTimer] = useState(null);
   const [firstLoginTime, setFirstLoginTime] = useState(null);
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
   // Helper function for case-insensitive admin check
   const isAdminUser = (role) => {
@@ -72,7 +73,7 @@ const App = () => {
           } else {
             // Clear storage if access denied
             localStorage.clear();
-            showNotification("Your access is denied for today. Please request access from admin.", "error");
+            displayNotification("Your access is denied for today. Please request access from admin.", "error");
           }
         });
       }
@@ -148,7 +149,7 @@ const App = () => {
     }
   };
 
-  // Function to log user activity
+  // FIXED: Function to log user activity - simplified to always log login
   const logUserActivity = async (username, action) => {
     try {
       const now = new Date();
@@ -156,28 +157,7 @@ const App = () => {
       const loginTime = now.toTimeString().split(' ')[0];
 
       if (action === 'login') {
-        // Check if there's already an active session for today
-        const { data: existingSessions, error: checkError } = await supabase
-          .from('user_logs')
-          .select('*')
-          .eq('user_name', username)
-          .eq('login_date', loginDate)
-          .is('logout_time', null)
-          .order('login_time', { ascending: false })
-          .limit(1);
-
-        if (checkError) {
-          console.error("Error checking existing sessions:", checkError);
-          return;
-        }
-
-        // If there's already an active session, don't create a new one
-        if (existingSessions && existingSessions.length > 0) {
-          console.log("Active session already exists, not creating new login entry");
-          return;
-        }
-
-        // Insert new login record only if no active session exists
+        // Always create a new login record without checking for existing sessions
         const { error } = await supabase
           .from('user_logs')
           .insert([
@@ -187,21 +167,23 @@ const App = () => {
               login_time: loginTime,
               logout_time: null,
               access_requested: false,
-              access_granted: false
+              request_time: null,
+              created_at: now.toISOString()
             }
           ]);
 
         if (error) {
           console.error("Error logging login activity:", error);
+          // Don't throw error, just log it
         } else {
           console.log("Login activity logged successfully");
         }
       } else if (action === 'logout') {
-        // Update the latest login record with logout time
+        // Update the most recent login record without logout time
         const { error } = await supabase
           .from('user_logs')
           .update({ 
-            logout_time: now.toTimeString().split(' ')[0]
+            logout_time: loginTime
           })
           .eq('user_name', username)
           .eq('login_date', loginDate)
@@ -217,6 +199,7 @@ const App = () => {
       }
     } catch (error) {
       console.error("Error in logUserActivity:", error);
+      // Don't throw error to prevent login failure
     }
   };
 
@@ -246,7 +229,7 @@ const App = () => {
     }
 
     const timer = setTimeout(() => {
-      showNotification("Auto logout: Session ended after 9 hours", "info");
+      displayNotification("Auto logout: Session ended after 9 hours", "info");
       handleAutoLogout();
     }, timeUntilLogout);
 
@@ -270,7 +253,7 @@ const App = () => {
     }
 
     const timer = setTimeout(() => {
-      showNotification("Auto logout: Session ended after 9 hours", "info");
+      displayNotification("Auto logout: Session ended after 9 hours", "info");
       handleAutoLogout();
     }, 9 * 60 * 60 * 1000);
 
@@ -301,12 +284,13 @@ const App = () => {
   const requestAccess = async (username) => {
     try {
       const today = new Date().toISOString().split('T')[0];
+      const requestTime = new Date().toTimeString().split(' ')[0];
       
       const { error } = await supabase
         .from('user_logs')
         .update({ 
           access_requested: true,
-          request_time: new Date().toTimeString().split(' ')[0]
+          request_time: requestTime
         })
         .eq('user_name', username)
         .eq('login_date', today)
@@ -325,34 +309,15 @@ const App = () => {
     }
   };
 
-  // Function to grant access (for admin)
-  const grantAccess = async (username) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      const { error } = await supabase
-        .from('user_logs')
-        .update({ 
-          access_granted: true,
-          grant_time: new Date().toTimeString().split(' ')[0]
-        })
-        .eq('user_name', username)
-        .eq('login_date', today)
-        .order('login_time', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        console.error("Error granting access:", error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error in grantAccess:", error);
-      return false;
-    }
+  // Show welcome popup function
+  const displayWelcomePopup = (username) => {
+    setShowWelcomePopup(true);
+    setTimeout(() => {
+      setShowWelcomePopup(false);
+    }, 2000); // Hide after 2 seconds
   };
 
+  // FIXED: Login function with better error handling for logging
   const login = async (username, password) => {
     try {
       // Query the master table in Supabase
@@ -365,7 +330,7 @@ const App = () => {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          showNotification("Invalid username or password", "error");
+          displayNotification("Invalid username or password", "error");
           return { success: false, accessDenied: false };
         }
         throw new Error(`Supabase error: ${error.message}`);
@@ -378,7 +343,7 @@ const App = () => {
         if (!userIsAdmin) {
           const canLogin = await checkLoginAccess(username);
           if (!canLogin) {
-            showNotification("Your access is denied for today. Please request access from admin.", "error");
+            displayNotification("Your access is denied for today. Please request access from admin.", "error");
             return { success: false, accessDenied: true };
           }
         }
@@ -413,8 +378,14 @@ const App = () => {
         localStorage.setItem("currentUser", JSON.stringify(userInfo));
         localStorage.setItem("userType", userInfo.role);
 
-        // Log login activity
-        await logUserActivity(username, 'login');
+        // FIXED: Log login activity - don't await to prevent blocking login
+        logUserActivity(username, 'login').catch(err => {
+          console.error("Failed to log login activity:", err);
+          // Continue with login even if logging fails
+        });
+
+        // Show welcome popup
+        displayWelcomePopup(username);
 
         // For regular users, setup auto logout
         if (!userIsAdmin) {
@@ -427,7 +398,7 @@ const App = () => {
             localStorage.setItem("firstLoginTime", firstLogin.getTime().toString());
             setupAutoLogoutFromFirstLogin(firstLogin);
           } else {
-            // If no first login found (shouldn't happen), use current time
+            // If no first login found, use current time
             const now = new Date();
             setFirstLoginTime(now);
             localStorage.setItem("firstLoginTime", now.getTime().toString());
@@ -435,23 +406,26 @@ const App = () => {
           }
         }
 
-        showNotification(`Welcome, ${username}!`, "success");
+        displayNotification(`Welcome, ${username}!`, "success");
         return { success: true, accessDenied: false };
       } else {
-        showNotification("Invalid username or password", "error");
+        displayNotification("Invalid username or password", "error");
         return { success: false, accessDenied: false };
       }
     } catch (error) {
       console.error("Login error:", error);
-      showNotification("An error occurred during login", "error");
+      displayNotification("An error occurred during login", "error");
       return { success: false, accessDenied: false };
     }
   };
 
   const logout = () => {
-    // Log logout activity
+    // Log logout activity - don't await to prevent blocking logout
     if (currentUser) {
-      logUserActivity(currentUser.username, 'logout');
+      logUserActivity(currentUser.username, 'logout').catch(err => {
+        console.error("Failed to log logout activity:", err);
+        // Continue with logout even if logging fails
+      });
     }
 
     setIsAuthenticated(false);
@@ -467,10 +441,10 @@ const App = () => {
       setAutoLogoutTimer(null);
     }
     
-    showNotification("Logged out successfully", "success");
+    displayNotification("Logged out successfully", "success");
   };
 
-  const showNotification = (message, type = "info") => {
+  const displayNotification = (message, type = "info") => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
@@ -480,7 +454,7 @@ const App = () => {
   const ProtectedRoute = ({ children, adminOnly = false }) => {
     if (!isAuthenticated) return <Navigate to="/login" />;
     if (adminOnly && !isAdmin()) {
-      showNotification(
+      displayNotification(
         "You don't have permission to access this page",
         "error"
       );
@@ -498,14 +472,62 @@ const App = () => {
         currentUser,
         userType,
         isAdmin,
-        showNotification,
+        showNotification: displayNotification,
         tabs,
         requestAccess,
-        grantAccess,
       }}
     >
       <Router>
         <div className="flex h-screen bg-gray-50 text-gray-900">
+          {/* Welcome Popup */}
+          {showWelcomePopup && currentUser && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in-0">
+              <div className="bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform animate-in zoom-in-95 scale-100 opacity-100">
+                <div className="text-center">
+                  {/* Welcome Icon */}
+                  <div className="mx-auto mb-6 w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                    <svg 
+                      className="w-10 h-10 text-white" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" 
+                      />
+                    </svg>
+                  </div>
+                  
+                  {/* Welcome Message */}
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                    Welcome to
+                  </h2>
+                  <h3 className="text-xl font-semibold text-blue-600 mb-4">
+                    Retail Enquiry Management System
+                  </h3>
+                  
+                  {/* User Greeting */}
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6">
+                    <p className="text-lg font-medium text-gray-700">
+                      Hello, <span className="font-bold text-blue-600">{currentUser.username}</span>!
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Role: <span className="font-medium capitalize">{currentUser.role}</span>
+                    </p>
+                  </div>
+                  
+                  {/* Loading Animation */}
+                  <div className="flex justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isAuthenticated && (
             <div className=" md:fixed md:inset-y-0 md:left-0 md:w-64 md:bg-gray-800 md:text-white md:z-20 md:shadow-lg">
               <Sidebar

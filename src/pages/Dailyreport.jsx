@@ -525,10 +525,10 @@ const DailyReport = () => {
                   <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
                     Daily Report
                   </h3>
-                  <p className="text-orange-50 text-sm lg:text-lg">
+                  <p className="text-orange-50 text-sm lg:text-lg hidden md:block">
                     Tracking History & Dealer Interactions
                   </p>
-                  <p className="text-orange-100 text-xs lg:text-sm mt-2">
+                  <p className="text-orange-100 text-xs lg:text-sm mt-2 hidden md:block">
                     Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
                   </p>
                 </div>

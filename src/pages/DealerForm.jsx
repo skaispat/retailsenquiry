@@ -777,12 +777,12 @@ function DealerForm() {
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-8 py-6 flex justify-between">
             <div>
-              <h3 className="text-2xl font-bold text-white mb-2">
+              <h3 className="text-2xl font-bold text-white mb-2 ">
                 Dealer Information
               </h3>
-              <p className="text-purple-50 text-lg">
-                Fill in the details about the dealer and sales person
-              </p>
+            <p className="text-purple-50 text-lg hidden md:block">
+  Fill in the details about the dealer and sales person
+</p>
             </div>
 
             <div className="max-w-xs">

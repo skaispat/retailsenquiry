@@ -11,12 +11,12 @@ import {
   FileSpreadsheet,
   LogOut,
   User,
-  CheckSquare,
   Shield,
   Clock,
   FileText,
 } from "lucide-react";
 import { AuthContext } from "../App"; 
+import logo from '../../public/logo.jpeg';
 
 function Sidebar({ userType, username, tabs = [] }) {
   const location = useLocation();
@@ -111,17 +111,27 @@ function Sidebar({ userType, username, tabs = [] }) {
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-slate-200/50 flex-shrink-0">
-          <h1
-            className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 text-xl 
-               w-full text-center lg:text-left"
-          >
-            {isCollapsed ? "REMS" : "Retail EMS"}
+        <div className="flex flex-col items-center py-4 px-4 border-b border-slate-200/50 flex-shrink-0">
+          {/* Logo */} <h1 className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 text-xl text-center">
+            Retail EMS
           </h1>
+          <div className="mb-3 mt-4">
+            <img 
+              className="h-25 w-65 object-contain" 
+              src={logo} 
+              alt="REMS Logo"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+          </div>
+          
+          {/* App Name */}
+         
 
           {/* Close button: visible only on mobile */}
           <button
-            className="lg:hidden absolute right-4 text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-lg"
+            className="lg:hidden absolute right-4 top-4 text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-lg"
             onClick={() => setIsCollapsed(false)}
           >
             <X className="h-5 w-5" />
@@ -129,7 +139,7 @@ function Sidebar({ userType, username, tabs = [] }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-4 py-3 space-y-2 overflow-y-auto">
           {filteredRoutes.length === 0 ? (
             <div className="text-center text-gray-500 p-4">
               No menu items available
@@ -173,7 +183,7 @@ function Sidebar({ userType, username, tabs = [] }) {
           )}
         </nav>
 
-        {/* Footer with User Info and Logout - Fixed positioning for mobile */}
+        {/* Footer with User Info and Logout - Fixed for mobile visibility */}
         <div className="mt-auto px-4 pb-12 pt-4 border-t border-slate-200/50 bg-white/30 space-y-3">
           {/* User Info */}
           <div className="flex items-center gap-3 px-3.5 py-2.5 bg-white/60 rounded-lg shadow-sm">
@@ -198,7 +208,7 @@ function Sidebar({ userType, username, tabs = [] }) {
             </div>
           </div>
 
-          {/* Logout Button */}
+          {/* Logout Button - Always visible */}
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-2.5 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg hover:shadow-xl transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-red-500/50 active:scale-[0.98]"
@@ -218,13 +228,16 @@ function Sidebar({ userType, username, tabs = [] }) {
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* Desktop toggle */}
-      <button
-        className="hidden lg:block fixed top-4 left-4 z-30 rounded-xl bg-white shadow-md border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 p-2"
-        onClick={() => setIsCollapsed(!isCollapsed)}
-      >
-        {isCollapsed ? <Menu className="h-4 w-4" /> : <X className="h-4 w-4" />}
-      </button>
+      {/* Additional Mobile Logout Button - Only shows when sidebar is collapsed on mobile */}
+      {/* {!isCollapsed && (
+        <button
+          className="lg:hidden fixed bottom-4 right-4 z-50 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg border border-red-600 hover:from-red-600 hover:to-red-700 p-3"
+          onClick={handleLogout}
+          title="Logout"
+        >
+          <LogOut className="h-5 w-5" />
+        </button>
+      )} */}
     </>
   );
 }

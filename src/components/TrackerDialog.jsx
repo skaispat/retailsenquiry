@@ -90,7 +90,7 @@ export default function TrackerDialog({
         "Call not picked",
         "Order Closed",
         "Order Pending",
-         "Site Visit", 
+        //  "Site Visit", 
       ];
     } else {
       // For Dealer and Distributor - original options
@@ -225,8 +225,11 @@ export default function TrackerDialog({
       "Call not picked" // For Site/Engineer
     ].includes(formData.stage);
 
+    // Special handling for Site/Engineer Order Closed stage
+    const isSiteEngineerOrderClosed = entityType === "Site/Engineer" && formData.stage === "Order Closed";
+
     setFieldVisibility({
-      showCustomerFeedback: (isFollowUpCallStage || isOrderNotReceivedStage) && 
+      showCustomerFeedback: (isFollowUpCallStage || isOrderNotReceivedStage || isSiteEngineerOrderClosed) && 
                            !["Call Not Picked", "Call not picked"].includes(formData.stage),
       showNextAction: isFollowUpCallStage || isOrderNotReceivedStage,
       showNextCallDate: isFollowUpCallStage || isOrderNotReceivedStage,
@@ -234,7 +237,8 @@ export default function TrackerDialog({
       showOrderedProducts: isOrderStage,
       showValueOfOrder: (isOrderStage || isOrderNotReceivedStage) && 
                        formData.stage !== "Order Not Received" && 
-                       formData.stage !== "Order Pending",
+                       formData.stage !== "Order Pending" &&
+                       !isSiteEngineerOrderClosed, // Remove value of order for Site/Engineer Order Closed
       requireStatus: true,
     });
   }, [formData.stage, entityType]);
@@ -337,6 +341,7 @@ export default function TrackerDialog({
     try {
       const dealerCode = dealerData?.col1 || "";
       const dealerName = dealerData?.col5 || "";
+      const select_value=dealerData?.select_value||"";
       const areaName = dealerData?.supabase_data?.area_name || ""; // Get area_name from Supabase data
       
       if (!dealerCode) throw new Error("Dealer code is missing");
@@ -351,6 +356,8 @@ export default function TrackerDialog({
           ? notInterestedReason
           : formData.stage === "Payment Enquiry" && paymentCollection === "No"
           ? whyNotCollection
+          : (entityType === "Site/Engineer" && formData.stage === "Order Closed")
+          ? formData.customerFeedback // For Site/Engineer Order Closed, use customer feedback
           : formData.customerFeedback;
 
       const nextDateOfCall =
@@ -369,11 +376,14 @@ export default function TrackerDialog({
         next_date_of_call: nextDateOfCall || null,
         order_qty: formData.orderQty || null,
         order_products: formData.orderedProducts || null,
-        value_of_order: formData.valueOfOrder || null,
+        value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed") 
+          ? null // Remove value of order for Site/Engineer Order Closed
+          : formData.valueOfOrder || null,
         sales_person_name: currentUser?.salesPersonName || "Unknown",
         payment_yes_no: formData.stage === "Payment Enquiry" ? paymentCollection : null,
         deler_distributer_site_name: dealerName || null,
-        area_name: areaName || null, // Add area_name to tracking_history
+        area_name: areaName || null,
+        select_value: select_value, // Add area_name to tracking_history
       };
 
       console.log("Inserting tracking data to Supabase:", insertData);
@@ -394,7 +404,9 @@ export default function TrackerDialog({
         order_qty: formData.orderQty || null,
         next_action: formData.nextAction || null,
         order_products: formData.orderedProducts || null,
-        value_of_order: formData.valueOfOrder || null,
+        value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed") 
+          ? null // Remove value of order for Site/Engineer Order Closed
+          : formData.valueOfOrder || null,
         last_date_of_call: new Date(),
         next_date_of_call: nextDateOfCall || null,
         actual: formData.stage === "Not Interested" || formData.stage === "Order Closed"
@@ -644,11 +656,13 @@ export default function TrackerDialog({
                 </div>
               )}
 
-              {/* Rest of your existing form fields remain the same */}
+              {/* Customer Feedback for Site/Engineer Order Closed */}
               {fieldVisibility.showCustomerFeedback && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer Feedback
+                    {entityType === "Site/Engineer" && formData.stage === "Order Closed" 
+                      ? "Order Details / Customer Feedback" 
+                      : "Customer Feedback"}
                   </label>
                   <textarea
                     name="customerFeedback"
@@ -656,7 +670,12 @@ export default function TrackerDialog({
                     onChange={handleInputChange}
                     className="w-full p-3 border border-gray-300 rounded-md"
                     rows={3}
-                    required
+                    required={fieldVisibility.showCustomerFeedback}
+                    placeholder={
+                      entityType === "Site/Engineer" && formData.stage === "Order Closed" 
+                        ? "Enter order details and customer feedback..." 
+                        : "Enter customer feedback..."
+                    }
                   />
                   {errors.customerFeedback && (
                     <p className="text-red-500 text-sm mt-1">

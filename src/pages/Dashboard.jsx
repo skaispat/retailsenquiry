@@ -151,6 +151,7 @@ function Dashboard() {
               address: row.address,
               last_date_of_call: row.last_date_of_call,
               status: row.status,
+              stage:row.stage,
               what_did_the_customer_say: row.what_did_the_customer_say || row.what_did_live_costs,
               next_date_of_call: row.next_date_of_call,
               next_action: row.next_action || row.next_sector,
@@ -276,49 +277,46 @@ function Dashboard() {
     
     setTotalCount(currentFilteredData.length);
     
-    // Updated logic for active dealers count
+    // CORRECTED: Updated logic for active dealers count
     const activeDealers = new Set();
-    
+
     currentFilteredData.forEach(row => {
       const dealerCode = row.dealer_code;
       const selectValue = row.select_value;
-      const planned = row.planned;
-      const actual = row.actual;
+      const status = row.stage; // CORRECTED: Using 'status' field instead of 'stage'
+      
+      console.log("DEBUG - Row data:", { 
+        dealerCode, 
+        selectValue, 
+        status
+      });
       
       // Check if this row meets the criteria for active dealer
       if (dealerCode && 
-          selectValue === "Dealer" && 
-          planned !== null && 
-          planned !== undefined && 
-          planned !== "" && 
-          (actual === null || actual === undefined || actual === "")) {
+          status === "Order Received" && 
+          selectValue === "Dealer") {
         activeDealers.add(dealerCode);
+        console.log("✅ Added active dealer:", dealerCode);
       }
     });
-    
+
+    console.log("DEBUG - Final active dealers:", Array.from(activeDealers));
     setActiveDealersCount(activeDealers.size);
     
     const ordersCount = currentFilteredData.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "").length;
     setTotalOrdersCount(ordersCount);
 
-    // const pendingCount = currentFilteredData.filter(row => {
-    //   const stage = row.status ? String(row.status).trim().toLowerCase() : '';
-    //   return stage !== "order received" && stage !== "order not received";
-    // }).length;
-
-    // setPendingEnquiriesCount(pendingCount);
-
     const pendingCount = currentFilteredData.filter(row => {
-  const planned = row.planned;
-  const actual = row.actual;
-  
-  return planned !== null && 
-         planned !== undefined && 
-         planned !== "" && 
-         (actual === null || actual === undefined || actual === "");
-}).length;
+      const planned = row.planned;
+      const actual = row.actual;
+      
+      return planned !== null && 
+             planned !== undefined && 
+             planned !== "" && 
+             (actual === null || actual === undefined || actual === "");
+    }).length;
 
-setPendingEnquiriesCount(pendingCount);
+    setPendingEnquiriesCount(pendingCount);
   }, [currentFilteredData]);
 
   const handleCardClick = (kpiType) => {
@@ -341,16 +339,12 @@ setPendingEnquiriesCount(pendingCount);
       dataForDialog = dataToFilter.filter(row => {
         const dealerCode = row.dealer_code;
         const selectValue = row.select_value;
-        const planned = row.planned;
-        const actual = row.actual;
+        const status = row.status; // CORRECTED: Using 'status' field instead of 'stage'
         
         if (dealerCode && 
             !uniqueDealerCodes.has(dealerCode) &&
-            selectValue === "Dealer" && 
-            planned !== null && 
-            planned !== undefined && 
-            planned !== "" && 
-            (actual === null || actual === undefined || actual === "")) {
+            status === "Order Received" && 
+            selectValue === "Dealer") {
           uniqueDealerCodes.add(dealerCode);
           return true;
         }
@@ -362,8 +356,13 @@ setPendingEnquiriesCount(pendingCount);
     } else if (kpiType === "pendingEnquiries") {
       title = "Pending Enquiries";
       dataForDialog = dataToFilter.filter(row => {
-        const stage = row.status ? String(row.status).trim().toLowerCase() : '';
-        return stage !== "order received" && stage !== "order not received";
+        const planned = row.planned;
+        const actual = row.actual;
+        
+        return planned !== null && 
+               planned !== undefined && 
+               planned !== "" && 
+               (actual === null || actual === undefined || actual === "");
       });
     }
 
@@ -372,6 +371,18 @@ setPendingEnquiriesCount(pendingCount);
     setDialogHeaders(headers);
     setIsDataDialogOpen(true);
   };
+
+  const getGreeting = () => {
+  const currentHour = new Date().getHours();
+  
+  if (currentHour >= 5 && currentHour < 12) {
+    return "Good morning";
+  } else if (currentHour >= 12 && currentHour < 17) {
+    return "Good afternoon";
+  } else {
+    return "Good evening";
+  }
+};
 
   if (isLoading) {
     return (
@@ -394,9 +405,9 @@ setPendingEnquiriesCount(pendingCount);
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
                 Dashboard
               </h1>
-              <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
-                Welcome to your business overview, {currentUserSalesPersonName}!
-              </p>
+         <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
+  {getGreeting()}, {currentUserSalesPersonName}!
+</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-md sm:shadow-lg border border-white/20 w-full sm:w-auto">
               <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
@@ -510,14 +521,6 @@ setPendingEnquiriesCount(pendingCount);
               </div>
             </div>
           </div>
-
-          {/* Error message banner */}
-          {/* <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-              <p className="text-red-700 font-medium">{error}</p>
-            </div>
-          </div> */}
         </div>
       </div>
     );
@@ -531,9 +534,9 @@ setPendingEnquiriesCount(pendingCount);
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
               Dashboard
             </h1>
-            <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
-              Welcome to your business overview, {currentUserSalesPersonName}!
-            </p>
+           <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
+  {getGreeting()}, {currentUserSalesPersonName}!
+</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-md sm:shadow-lg border border-white/20 w-full sm:w-auto">
             <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">

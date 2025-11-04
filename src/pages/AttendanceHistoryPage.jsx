@@ -343,7 +343,7 @@ const exportToPDF = () => {
                 <h1 className="text-2xl font-bold text-white mb-2">
                   Attendance History
                 </h1>
-                <p className="text-blue-50">
+                <p className="text-blue-50 hidden md:block">
                   View and filter attendance records
                 </p>
               </div>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { toast, Toaster } from "react-hot-toast";
-import { Download, Filter, Search } from "lucide-react";
+import { Download, Filter, Search, X, Calendar, User, Building } from "lucide-react";
 import { AuthContext } from "../App";
 import supabase from "../SupaabseClient";
 
@@ -13,6 +13,7 @@ const Reports = () => {
   const [dealerNameFilter, setDealerNameFilter] = useState("");
   const [lastActionFilter, setLastActionFilter] = useState("");
   const [isMobile, setIsMobile] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const { currentUser, isAuthenticated } = useContext(AuthContext);
   const currentUserSalesPersonName = currentUser?.salesPersonName || "Unknown User";
@@ -21,7 +22,6 @@ const Reports = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [sheetHeaders, setSheetHeaders] = useState([]);
   const [error, setError] = useState(null);
-  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
   const DISPLAY_COLUMNS = [4, 5, 8, 21, 26, 27, 28, 29, 30, 31, 32];
 
@@ -267,6 +267,11 @@ const Reports = () => {
     return matchesSearchTerm && matchesSalesPersonFilter && matchesDealerNameFilter && matchesLastActionFilter && matchesUserSalesPerson;
   });
 
+  // Get unique values for dropdowns
+  const uniqueSalesPersons = [...new Set(indents.map(item => item.col4).filter(Boolean))];
+  const uniqueDealerNames = [...new Set(indents.map(item => item.col5).filter(Boolean))];
+  const uniqueLastActions = [...new Set(indents.map(item => item.col21).filter(Boolean))];
+
   const exportData = () => {
     try {
       const csvContent = [
@@ -299,6 +304,11 @@ const Reports = () => {
       link.click();
       document.body.removeChild(link);
 
+      toast.success("Data exported successfully!", {
+        duration: 3000,
+        position: "top-right",
+      });
+
     } catch (error) {
       console.error("Export error:", error);
       toast.error("Failed to export data", {
@@ -318,9 +328,6 @@ const Reports = () => {
             <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
               Dealer Records ({items.length})
             </h3>
-            {/* <div className="text-xs text-slate-500">
-              Scroll to view more
-            </div> */}
           </div>
         </div>
 
@@ -539,91 +546,33 @@ const Reports = () => {
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Main Card */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+            {/* Header Section */}
             <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-6 lg:px-8">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div className="text-center lg:text-left">
                   <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
                     Dealer Performance Report
                   </h3>
-                  <p className="text-orange-50 text-sm lg:text-lg">
+                  <p className="text-orange-50 text-sm lg:text-lg hidden md:block">
                     Comprehensive view of all dealers and their performance metrics
                   </p>
-                  <p className="text-orange-100 text-xs lg:text-sm mt-2">
+                  <p className="text-orange-100 text-xs lg:text-sm mt-2 hidden md:block">
                     Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-3">
-                  <div className="relative">
-                    <button
-                      onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm lg:text-base"
-                      aria-expanded={isFilterDropdownOpen}
-                      aria-haspopup="true"
-                    >
-                      <Filter className="h-4 w-4" />
-                      <span className="hidden sm:inline">Filter</span>
-                    </button>
-                    {isFilterDropdownOpen && (
-                      <div className="absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-4">
-                        <div className="py-1">
-                          <div className="block px-4 py-2 text-sm text-gray-700 font-semibold">
-                            Filter by Columns
-                          </div>
-                          <div className="border-t border-gray-200 my-2"></div>
-                          <div className="grid gap-4">
-                            <div>
-                              <label
-                                htmlFor="sales-person-filter"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Sales Person Name
-                              </label>
-                              <input
-                                id="sales-person-filter"
-                                type="text"
-                                placeholder="Filter by Sales Person"
-                                value={salesPersonFilter}
-                                onChange={(e) => setSalesPersonFilter(e.target.value)}
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-                              />
-                            </div>
-                            <div>
-                              <label
-                                htmlFor="dealer-name-filter"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Dealer Name
-                              </label>
-                              <input
-                                id="dealer-name-filter"
-                                type="text"
-                                placeholder="Filter by Dealer Name"
-                                value={dealerNameFilter}
-                                onChange={(e) => setDealerNameFilter(e.target.value)}
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-                              />
-                            </div>
-                            <div>
-                              <label
-                                htmlFor="last-action-filter"
-                                className="block text-sm font-medium text-gray-700"
-                              >
-                                Last Action
-                              </label>
-                              <input
-                                id="last-action-filter"
-                                type="text"
-                                placeholder="Filter by Last Action"
-                                value={lastActionFilter}
-                                onChange={(e) => setLastActionFilter(e.target.value)}
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  {/* Mobile Filter Toggle */}
+                  {isMobile && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setIsFilterOpen(!isFilterOpen)}
+                        className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 flex items-center gap-2"
+                      >
+                        <Filter className="h-4 w-4" />
+                        Filters
+                      </button>
+                    </div>
+                  )}
                   <button
                     onClick={exportData}
                     className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm lg:text-base"
@@ -634,21 +583,146 @@ const Reports = () => {
                 </div>
               </div>
             </div>
+
+            {/* Filters Section */}
             <div className="p-4 lg:p-8">
-              <div className="flex items-center mb-6">
-                <div className="relative w-full max-w-md">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 lg:h-5 lg:w-5 text-slate-400" />
+              {/* Mobile Filter Dropdown */}
+              {isMobile && isFilterOpen && (
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="search"
+                      placeholder="Search dealers..."
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <User className="h-4 w-4" />
+                      <span>Sales Person</span>
+                    </div>
+                    <select
+                      value={salesPersonFilter}
+                      onChange={(e) => setSalesPersonFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Sales Persons</option>
+                      {uniqueSalesPersons.map(person => (
+                        <option key={person} value={person}>{person}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Building className="h-4 w-4" />
+                      <span>Dealer Name</span>
+                    </div>
+                    <select
+                      value={dealerNameFilter}
+                      onChange={(e) => setDealerNameFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Dealers</option>
+                      {uniqueDealerNames.map(dealer => (
+                        <option key={dealer} value={dealer}>{dealer}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Calendar className="h-4 w-4" />
+                      <span>Last Action</span>
+                    </div>
+                    <select
+                      value={lastActionFilter}
+                      onChange={(e) => setLastActionFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Actions</option>
+                      {uniqueLastActions.map(action => (
+                        <option key={action} value={action}>{action}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Filters */}
+              {!isMobile && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="search"
+                      placeholder="Search dealers..."
+                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <select
+                      value={salesPersonFilter}
+                      onChange={(e) => setSalesPersonFilter(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Sales Persons</option>
+                      {uniqueSalesPersons.map(person => (
+                        <option key={person} value={person}>{person}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <select
+                      value={dealerNameFilter}
+                      onChange={(e) => setDealerNameFilter(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Dealers</option>
+                      {uniqueDealerNames.map(dealer => (
+                        <option key={dealer} value={dealer}>{dealer}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <select
+                      value={lastActionFilter}
+                      onChange={(e) => setLastActionFilter(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Actions</option>
+                      {uniqueLastActions.map(action => (
+                        <option key={action} value={action}>{action}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile Search Bar (when filters are closed) */}
+              {isMobile && !isFilterOpen && (
+                <div className="mb-4 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="search"
                     placeholder="Search dealers..."
-                    className="w-full pl-10 lg:pl-12 pr-4 py-2 lg:py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-700 font-medium text-sm lg:text-base"
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-              </div>
+              )}
 
-              {/* Responsive Data Display */}
+              {/* Data Display */}
               {isMobile ? (
                 <MobileCardView items={filteredIndents} />
               ) : (
