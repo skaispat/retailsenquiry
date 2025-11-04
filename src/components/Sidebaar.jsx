@@ -13,6 +13,8 @@ import {
   User,
   CheckSquare,
   Shield,
+  Clock,
+  FileText,
 } from "lucide-react";
 import { AuthContext } from "../App"; 
 
@@ -59,12 +61,18 @@ function Sidebar({ userType, username, tabs = [] }) {
       color: "text-emerald-500",
     },
     {
-      label: "Daily Report",
-      icon: CheckSquare,
-      href: "/daily-report",
+      label: "Attendance History",
+      icon: Clock,
+      href: "/attendance-history",
       color: "text-teal-500",
     },
-   {
+    {
+      label: "Daily Report",
+      icon: FileText,
+      href: "/daily-report",
+      color: "text-blue-500",
+    },
+    {
       label: "Admin Logs",
       icon: Shield,
       href: "/admin-logs",
@@ -99,8 +107,7 @@ function Sidebar({ userType, username, tabs = [] }) {
           "fixed left-0 top-0 z-50 h-full bg-gradient-to-b from-purple-50 via-blue-50 to-indigo-50 border-r border-slate-200/80 shadow-xl transition-all duration-300 ease-in-out flex flex-col",
           "lg:relative lg:translate-x-0 lg:shadow-lg",
           isCollapsed ? "translate-x-0 w-72" : "-translate-x-full w-72",
-          "lg:w-64",
-          "pb-16 lg:pb-4" // Add bottom padding to avoid footer overlap
+          "lg:w-64"
         )}
       >
         {/* Header */}
@@ -123,49 +130,51 @@ function Sidebar({ userType, username, tabs = [] }) {
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          {filteredRoutes.map((route) => (
-            <Link
-              key={route.href}
-              to={route.href}
-              onClick={() => {
-                if (window.innerWidth < 1024) setIsCollapsed(false);
-              }}
-              className={cn(
-                "group flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200",
-                "hover:bg-white/60 hover:shadow-sm hover:scale-[1.02]",
-                "focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white/60",
-                location.pathname === route.href
-                  ? "bg-white shadow-md text-slate-900 border border-slate-200/50"
-                  : "text-slate-600 hover:text-slate-900",
-                route.adminOnly ? "border-l-4 border-l-red-400" : ""
-              )}
-              title={route.label}
-            >
-              <route.icon
+          {filteredRoutes.length === 0 ? (
+            <div className="text-center text-gray-500 p-4">
+              No menu items available
+            </div>
+          ) : (
+            filteredRoutes.map((route) => (
+              <Link
+                key={route.href}
+                to={route.href}
+                onClick={() => {
+                  if (window.innerWidth < 1024) setIsCollapsed(false);
+                }}
                 className={cn(
-                  "h-5 w-5 flex-shrink-0 transition-colors",
-                  route.color,
-                  location.pathname === route.href && "drop-shadow-sm"
+                  "group flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200",
+                  "hover:bg-white/60 hover:shadow-sm hover:scale-[1.02]",
+                  "focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white/60",
+                  location.pathname === route.href
+                    ? "bg-white shadow-md text-slate-900 border border-slate-200/50"
+                    : "text-slate-600 hover:text-slate-900"
                 )}
-              />
-              <span className="truncate">{route.label}</span>
-              {route.adminOnly && (
-                <span className="ml-auto text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full font-medium">
-                  Admin
-                </span>
-              )}
-              {location.pathname === route.href && !route.adminOnly && (
-                <div className="ml-auto w-2 h-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full" />
-              )}
-              {location.pathname === route.href && route.adminOnly && (
-                <div className="ml-auto w-2 h-2 bg-red-500 rounded-full" />
-              )}
-            </Link>
-          ))}
+                title={route.label}
+              >
+                <route.icon
+                  className={cn(
+                    "h-5 w-5 flex-shrink-0 transition-colors",
+                    route.color,
+                    location.pathname === route.href && "drop-shadow-sm"
+                  )}
+                />
+                <span className="truncate">{route.label}</span>
+                
+                {/* Show active indicator for all routes */}
+                {location.pathname === route.href && (
+                  <div className={cn(
+                    "ml-auto w-2 h-2 rounded-full",
+                    route.adminOnly ? "bg-red-500" : "bg-gradient-to-r from-purple-500 to-blue-500"
+                  )} />
+                )}
+              </Link>
+            ))
+          )}
         </nav>
 
-        {/* Footer with User Info and Logout */}
-        <div className="mt-auto px-4 pb-6 pt-4 border-t border-slate-200/50 bg-white/30 space-y-2">
+        {/* Footer with User Info and Logout - Fixed positioning for mobile */}
+        <div className="mt-auto px-4 pb-12 pt-4 border-t border-slate-200/50 bg-white/30 space-y-3">
           {/* User Info */}
           <div className="flex items-center gap-3 px-3.5 py-2.5 bg-white/60 rounded-lg shadow-sm">
             <div className={cn(
@@ -192,7 +201,7 @@ function Sidebar({ userType, username, tabs = [] }) {
           {/* Logout Button */}
           <button
             onClick={handleLogout}
-            className="w-full mb-5 flex items-center justify-center gap-2.5 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg hover:shadow-xl transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-red-500/50 active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2.5 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg hover:shadow-xl transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-red-500/50 active:scale-[0.98]"
             title="Logout"
           >
             <LogOut className="h-4 w-4 flex-shrink-0" />

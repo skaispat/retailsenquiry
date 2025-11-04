@@ -9,7 +9,7 @@ function DealerForm() {
   const [formData, setFormData] = useState({
     stateName: "",
     districtName: "",
-    areaName: "", // New field added
+    areaName: "",
     salesPersonName: "",
     dealerName: "",
     aboutDealer: "",
@@ -26,7 +26,7 @@ function DealerForm() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modal states - only one modal for final result
+  // Modal states
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("success");
   const [modalMessage, setModalMessage] = useState("");
@@ -51,7 +51,15 @@ function DealerForm() {
   const [photoLocation, setPhotoLocation] = useState(null);
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
-  const fileInputRef = useRef(null); // Ref for file input to clear it
+  const fileInputRef = useRef(null);
+
+  // Camera capture states - FIXED
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraError, setCameraError] = useState("");
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
 
   // Access currentUser and userRole from AuthContext
   const { currentUser, isAuthenticated } = useContext(AuthContext);
@@ -59,8 +67,6 @@ function DealerForm() {
 
   const SPREADSHEET_ID_FOR_DEALER_SIZES =
     "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk";
-  const APPS_SCRIPT_URL_FOR_SUBMISSION =
-    "https://script.google.com/macros/s/AKfycby8tWRO5JWFmJmDECvf85x8baVHqXNfePy-w_tpk0ZL3lrby_M2Z9jNoRvlLokFIQ8/exec";
 
   const DEFAULT_DEALER_SIZES = ["Small", "Medium", "Large"];
   
@@ -192,7 +198,7 @@ function DealerForm() {
   };
 
   /**
-   * Process photo with location - This is the main function that coordinates the flow
+   * Process photo with location
    */
   const processPhotoWithLocation = async (file) => {
     if (!file) return null;
@@ -202,7 +208,7 @@ function DealerForm() {
       const previewUrl = URL.createObjectURL(file);
       setPhotoPreview(previewUrl);
       
-      // Step 2: Show location capture in progress (no modal, just status text)
+      // Step 2: Show location capture in progress
       setIsCapturingLocation(true);
 
       // Step 3: Capture location
@@ -247,12 +253,133 @@ function DealerForm() {
     
     // Check if file is an image
     if (!file.type.startsWith('image/')) {
-      // Only show error modal for invalid file type
       showToast("❌ Please select an image file", "error");
       return;
     }
     
     await processPhotoWithLocation(file);
+  };
+
+  /**
+   * Start camera for photo capture - FIXED
+   */
+  const startCamera = async () => {
+    try {
+      setCameraError("");
+      setIsCameraLoading(true);
+      
+      // Check if camera is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError("Camera not supported on this device");
+        setIsCameraLoading(false);
+        return;
+      }
+
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment', // Prefer rear camera
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      
+      setCameraStream(stream);
+      setIsCameraOpen(true);
+      
+      // Wait for video to be ready
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        
+        // Wait for video to load
+        await new Promise((resolve) => {
+          if (videoRef.current) {
+            videoRef.current.onloadedmetadata = () => {
+              resolve();
+            };
+          }
+        });
+        
+        // Play the video
+        await videoRef.current.play();
+      }
+      
+    } catch (error) {
+      console.error("Camera error:", error);
+      if (error.name === 'NotAllowedError') {
+        setCameraError("Camera access denied. Please allow camera permissions.");
+      } else if (error.name === 'NotFoundError') {
+        setCameraError("No camera found on this device.");
+      } else {
+        setCameraError("Unable to access camera. Please check permissions.");
+      }
+    } finally {
+      setIsCameraLoading(false);
+    }
+  };
+
+  /**
+   * Stop camera and clean up - FIXED
+   */
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => {
+        track.stop();
+      });
+      setCameraStream(null);
+    }
+    setIsCameraOpen(false);
+    setCameraError("");
+    setIsCameraLoading(false);
+  };
+
+  /**
+   * Capture photo from camera - FIXED
+   */
+  const capturePhoto = async () => {
+    if (!videoRef.current) {
+      console.error("Video element not found");
+      return;
+    }
+
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw current video frame to canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert canvas to blob with better quality
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          // Create file from blob
+          const file = new File([blob], `camera-capture-${Date.now()}.jpg`, {
+            type: 'image/jpeg'
+          });
+
+          console.log("Photo captured successfully, file size:", blob.size);
+
+          // Stop camera first
+          stopCamera();
+
+          // Process the captured photo with location
+          await processPhotoWithLocation(file);
+        } else {
+          console.error("Failed to create blob from canvas");
+          showToast("❌ Failed to capture photo", "error");
+        }
+      }, 'image/jpeg', 0.9); // Increased quality
+
+    } catch (error) {
+      console.error("Photo capture error:", error);
+      showToast("❌ Failed to capture photo", "error");
+    }
   };
 
   /**
@@ -297,7 +424,7 @@ function DealerForm() {
   };
 
   /**
-   * Shows centered modal popup - Only used for final results
+   * Shows centered modal popup
    */
   const showToast = (message, type = "success") => {
     setModalMessage(message);
@@ -468,14 +595,17 @@ function DealerForm() {
     };
   }, [salesPersonDropdownRef]);
 
-  // Clean up photo preview URL when component unmounts or photo changes
+  // Clean up camera stream and photo preview URL when component unmounts
   useEffect(() => {
     return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
       if (photoPreview) {
         URL.revokeObjectURL(photoPreview);
       }
     };
-  }, [photoPreview]);
+  }, [cameraStream, photoPreview]);
 
   /**
    * Handles changes to form input fields.
@@ -571,7 +701,7 @@ function DealerForm() {
       const insertData = {
         state_name: formData.stateName,
         district_name: formData.districtName,
-        area_name: formData.areaName, // New field added
+        area_name: formData.areaName,
         sales_person_name: formData.salesPersonName,
         dealer_name: formData.dealerName,
         about_dealer: formData.aboutDealer,
@@ -579,12 +709,10 @@ function DealerForm() {
         contact_number: formData.contactNumber,
         email_address: formData.emailAddress,
         planned: date,
-        // Store image URL in image_url column
         image_url: photoUrl || null,
         dealer_size: formData.dealerSize || formData.siteNature, 
         avg_qty: formData.avgQty,
-        select_value:entityType,
-        // Conditional fields based on entity type
+        select_value: entityType,
         ...(entityType !== "Site/Engineer" && {
           date_of_birth: formattedDob,
           anniversary: formattedAnniversary,
@@ -609,7 +737,7 @@ function DealerForm() {
       setFormData({
         stateName: "",
         districtName: "",
-        areaName: "", // Reset new field
+        areaName: "",
         salesPersonName:
           userRole === "User" && currentUser?.salesPersonName
             ? currentUser.salesPersonName
@@ -714,7 +842,6 @@ function DealerForm() {
                       )}
                     </div>
 
-                    {/* New Area Name Field */}
                     <div className="space-y-2">
                       <label className="block text-sm font-semibold text-slate-700 mb-3">
                         Area Name
@@ -888,7 +1015,6 @@ function DealerForm() {
                       )}
                     </div>
                     
-                    {/* Conditionally render Date of Birth and Anniversary for non-Site/Engineer */}
                     {!isSiteEngineer && (
                       <>
                         <div className="space-y-2">
@@ -930,7 +1056,6 @@ function DealerForm() {
                       </>
                     )}
                     
-                    {/* Show Site Nature for Site/Engineer */}
                     {isSiteEngineer && (
                       <div className="space-y-2">
                         <label className="block text-sm font-semibold text-slate-700 mb-3">
@@ -962,7 +1087,6 @@ function DealerForm() {
                 {/* Business Information */}
                 <div className="space-y-6">
                   <div className="space-y-6">
-                    {/* About Dealer and Address Section */}
                     <div className="grid gap-6 md:grid-cols-2">
                       <div className="space-y-2">
                         <label className="block text-sm font-semibold text-slate-700 mb-3">
@@ -1001,9 +1125,7 @@ function DealerForm() {
                       </div>
                     </div>
 
-                    {/* Dealer Size and Average Quantity Section */}
                     <div className="grid gap-6 md:grid-cols-2">
-                      {/* Dealer Size - only for non-Site/Engineer */}
                       {!isSiteEngineer && (
                         <div className="space-y-2">
                           <label className="block text-sm font-semibold text-slate-700 mb-3">
@@ -1040,16 +1162,13 @@ function DealerForm() {
                         </div>
                       )}
 
-                      {/* Site Engineer View: Upload + Average Quantity in one row */}
                       {isSiteEngineer ? (
                         <div className="flex flex-col md:flex-row gap-6 md:col-span-2">
-                          {/* Upload Photo Section */}
                           <div className="w-full space-y-2">
                             <label className="block text-sm font-semibold text-slate-700 mb-3">
                               Upload Photo (with Location Capture)
                             </label>
                             
-                            {/* Photo Preview */}
                             {photoPreview && (
                               <div className="mb-4 p-4 bg-green-50 rounded-xl border border-green-200">
                                 <p className="text-green-700 font-medium mb-2">
@@ -1074,16 +1193,41 @@ function DealerForm() {
                               </div>
                             )}
 
-                            {/* Upload Input */}
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              name="photo"
-                              onChange={handleInputChange}
-                              accept="image/*"
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
-                              disabled={isCapturingLocation}
-                            />
+                            <div className="flex flex-col sm:flex-row gap-3 mb-3">
+                              <div className="flex-1">
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  name="photo"
+                                  onChange={handleInputChange}
+                                  accept="image/*"
+                                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                                  disabled={isCapturingLocation}
+                                />
+                              </div>
+                              
+                              <button
+                                type="button"
+                                onClick={startCamera}
+                                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl shadow-sm transition-all duration-200 flex items-center justify-center gap-2"
+                                disabled={isCapturingLocation || isCameraLoading}
+                              >
+                                {isCameraLoading ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    Loading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    Take Photo
+                                  </>
+                                )}
+                              </button>
+                            </div>
 
                             {isCapturingLocation && (
                               <p className="text-blue-600 text-sm mt-2">
@@ -1112,7 +1256,6 @@ function DealerForm() {
                             )}
                           </div>
 
-                          {/* Average Quantity beside photo */}
                           <div className="w-full space-y-2">
                             <label className="block text-sm font-semibold text-slate-700 mb-3">
                               Average Quantity
@@ -1133,7 +1276,6 @@ function DealerForm() {
                           </div>
                         </div>
                       ) : (
-                        // Non-Site Engineer — Average Quantity separate field
                         <div className="space-y-2">
                           <label className="block text-sm font-semibold text-slate-700 mb-3">
                             Average Quantity
@@ -1157,7 +1299,6 @@ function DealerForm() {
                   </div>
                 </div>
 
-                {/* Submit Button */}
                 <div className="pt-6 border-t border-slate-200">
                   <button
                     type="submit"
@@ -1193,12 +1334,75 @@ function DealerForm() {
         </div>
       </div>
 
-      {/* Centered Modal Popup - Only shows on submit result */}
+      {/* Camera Modal - FIXED */}
+      {isCameraOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800">Take Photo</h3>
+                <button
+                  onClick={stopCamera}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+
+              {cameraError ? (
+                <div className="text-center py-8">
+                  <p className="text-red-500 mb-4">{cameraError}</p>
+                  <button
+                    onClick={stopCamera}
+                    className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative bg-black rounded-lg overflow-hidden mb-4">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-96 object-cover"
+                    />
+                    <canvas ref={canvasRef} className="hidden" />
+                  </div>
+                  
+                  <div className="flex justify-center gap-4">
+                    <button
+                      onClick={capturePhoto}
+                      className="px-8 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" fill="currentColor"/>
+                      </svg>
+                      Capture Photo
+                    </button>
+                    <button
+                      onClick={stopCamera}
+                      className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Centered Modal Popup */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
             <div className="p-8 text-center">
-              {/* Icon */}
               <div className="mx-auto mb-6 w-20 h-20 rounded-full flex items-center justify-center">
                 {modalType === "success" ? (
                   <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
@@ -1239,7 +1443,6 @@ function DealerForm() {
                 )}
               </div>
 
-              {/* Title */}
               <h2
                 className={`text-2xl font-bold mb-4 ${
                   modalType === "success" ? "text-green-600" : "text-red-600"
@@ -1248,12 +1451,10 @@ function DealerForm() {
                 {modalType === "success" ? "Success!" : "Error!"}
               </h2>
 
-              {/* Message */}
               <p className="text-gray-600 text-lg mb-8 leading-relaxed">
                 {modalMessage}
               </p>
 
-              {/* OK Button */}
               <button
                 onClick={closeModal}
                 className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${

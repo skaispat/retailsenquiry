@@ -536,11 +536,12 @@ const Tracker = () => {
               {/* Desktop Table View (hidden on mobile) */}
               <div className="hidden lg:block h-full">
                 <div className="h-full flex flex-col">
-                  {/* Fixed Table Header */}
-                  <div className="flex-shrink-0 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                  {/* Scrollable Table Container */}
+                  <div className="flex-1 overflow-auto">
                     <table className="w-full">
-                      <thead>
-                        <tr>
+                      {/* Fixed Table Header */}
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
                           <th className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">
                             Action
                           </th>
@@ -554,12 +555,8 @@ const Tracker = () => {
                           ))}
                         </tr>
                       </thead>
-                    </table>
-                  </div>
-                  
-                  {/* Scrollable Table Body - Takes all remaining space */}
-                  <div className="flex-1 overflow-auto">
-                    <table className="w-full">
+                      
+                      {/* Scrollable Table Body */}
                       <tbody className="bg-white divide-y divide-slate-200">
                         {filteredIndents.length === 0 ? (
                           <tr>

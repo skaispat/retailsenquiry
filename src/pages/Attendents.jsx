@@ -58,6 +58,17 @@ const Attendance = () => {
     });
   };
 
+  // Helper function to check if two dates are the same day
+  const isSameDay = (date1, date2) => {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return (
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate()
+    );
+  };
+
   const [formData, setFormData] = useState({
     status: "",
     startDate: formatDateInput(new Date()),
@@ -186,17 +197,29 @@ const Attendance = () => {
 
     setIsLoadingHistory(true);
     try {
-      // Fetch all attendance records
+      // Get today's date for filtering
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+      console.log("Fetching today's attendance data...");
+      console.log("Today start:", todayStart);
+      console.log("Today end:", todayEnd);
+
+      // Fetch only today's attendance records
       const { data, error } = await supabase
         .from('attendance')
         .select('*')
+        .gte('date_and_time', todayStart.toISOString())
+        .lt('date_and_time', todayEnd.toISOString())
         .order('date_and_time', { ascending: false });
 
       if (error) {
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      console.log("✅ Attendance data loaded successfully from Supabase");
+      console.log("✅ Today's attendance data loaded successfully from Supabase");
+      console.log("Raw data count:", data?.length);
 
       // Format the data for display
       const formattedHistory = data.map((item) => {
@@ -213,7 +236,9 @@ const Attendance = () => {
         };
       });
 
-      // Filter based on user role
+      console.log("Formatted history count:", formattedHistory.length);
+
+      // Filter based on user role - show all for admin, only current user for others
       const filteredHistory =
         userRole === "Admin"
           ? formattedHistory
@@ -221,17 +246,15 @@ const Attendance = () => {
               (entry) => entry.salesPersonName === salesPersonName
             );
 
+      console.log("Filtered history count:", filteredHistory.length);
       setAttendance(filteredHistory);
 
-      // Filter for today's attendance data
-      const today = formatDateDDMMYYYY(new Date());
+      // For form validation - filter for current user's today data
       const filteredHistoryData = formattedHistory.filter(
-        (entry) =>
-          entry.salesPersonName === salesPersonName &&
-          entry.dateTime?.split(" ")[0].toString() === today
+        (entry) => entry.salesPersonName === salesPersonName
       );
 
-      console.log("Today's attendance data:", filteredHistoryData);
+      console.log("Current user's today data:", filteredHistoryData);
       setAttendanceData(filteredHistoryData);
 
     } catch (error) {

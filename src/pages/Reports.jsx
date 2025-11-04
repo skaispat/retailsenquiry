@@ -1,37 +1,30 @@
 "use client";
 
-import { useState, useEffect, useContext } from "react"; // Import useContext
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { toast, Toaster } from "react-hot-toast";
 import { Download, Filter, Search } from "lucide-react";
-import { AuthContext } from "../App"; // Assuming AuthContext is defined in App.js or a similar path
+import { AuthContext } from "../App";
 import supabase from "../SupaabseClient";
 
 const Reports = () => {
   const [indents, setIndents] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  // Filter states for the relevant columns that might be filtered
-  const [salesPersonFilter, setSalesPersonFilter] = useState("");   // For Sales Person Name (Col E)
-  const [dealerNameFilter, setDealerNameFilter] = useState("");     // For Dealer Name (Col F)
-  const [lastActionFilter, setLastActionFilter] = useState("");     // For Last Action (Col V)
+  const [salesPersonFilter, setSalesPersonFilter] = useState("");
+  const [dealerNameFilter, setDealerNameFilter] = useState("");
+  const [lastActionFilter, setLastActionFilter] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Get user authentication context
   const { currentUser, isAuthenticated } = useContext(AuthContext);
-
-  // Extract salesPersonName and userRole from currentUser
   const currentUserSalesPersonName = currentUser?.salesPersonName || "Unknown User";
-  const userRole = currentUser?.role || "User"; // Default to "User" if role is not defined
+  const userRole = currentUser?.role || "User";
 
   const [isLoading, setIsLoading] = useState(true);
   const [sheetHeaders, setSheetHeaders] = useState([]);
   const [error, setError] = useState(null);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
-  // DISPLAY_COLUMNS:
-  // Order: Sales Person (E), Dealer Name (F), Dealer Size (H), Last Action (V),
-  // then Last Order Before (AA), Last Call Before (AB), MTD (AC), YTD (AD), Pending Amount (AE), No Of Bills (AF), Status (AG)
   const DISPLAY_COLUMNS = [4, 5, 8, 21, 26, 27, 28, 29, 30, 31, 32];
 
-  // Column mapping constant
   const COLUMN_MAPPING = {
     'sales_person_name': 'col4',
     'dealer_name': 'col5', 
@@ -46,45 +39,47 @@ const Reports = () => {
     'status': 'col32'
   };
 
-  // Function to format date values to DD/MM/YYYY
+  // Check screen size on mount and resize
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
   const formatDate = (value) => {
     if (!value) return "";
 
-    // If it's already a string in DD/MM/YYYY format, return as is
     if (typeof value === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
       return value;
     }
 
-    // Handle various date formats
     let date;
 
     if (typeof value === 'number') {
-      // Excel/Google Sheets serial date number
       const excelEpoch = new Date(1899, 11, 30);
       date = new Date(excelEpoch.getTime() + (value * 24 * 60 * 60 * 1000));
     } else if (typeof value === 'string') {
-      // Try to parse various string formats
       const cleanValue = value.trim();
-
-      // Handle formats like "Date(2024,0,15)" or similar
       const dateMatch = cleanValue.match(/Date\((\d{4}),(\d{1,2}),(\d{1,2})\)/);
       if (dateMatch) {
         const [, year, month, day] = dateMatch;
         date = new Date(parseInt(year), parseInt(month), parseInt(day));
       } else {
-        // Try standard date parsing
         date = new Date(cleanValue);
       }
     } else {
       date = new Date(value);
     }
 
-    // Check if date is valid
     if (isNaN(date.getTime())) {
-      return value; // Return original value if not a valid date
+      return value;
     }
 
-    // Format to DD/MM/YYYY
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
@@ -92,35 +87,30 @@ const Reports = () => {
     return `${day}/${month}/${year}`;
   };
 
-  // Function to check if a value is likely a date
   const isDateValue = (value, headerLabel = '') => {
     if (!value) return false;
 
-    // Check if header contains date-related keywords
     const headerLower = headerLabel.toLowerCase();
     const isDateHeader = headerLower.includes('date') ||
       headerLower.includes('time') ||
       headerLower.includes('created') ||
       headerLower.includes('updated') ||
       headerLower.includes('modified') ||
-      headerLower.includes('order'); // Often 'Last Order' might contain dates
+      headerLower.includes('order');
 
     if (isDateHeader) return true;
 
-    // Check if value looks like a date
     if (typeof value === 'number' && value > 40000 && value < 60000) {
-      // Likely Excel/Sheets serial date (dates after 2009 for example)
       return true;
     }
 
     if (typeof value === 'string') {
-      // Check for common date patterns
       const datePatterns = [
-        /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/, // YYYY-MM-DD or ISO
-        /^\d{2}\/\d{2}\/\d{4}$/, // DD/MM/YYYY or MM/DD/YYYY
-        /^\d{1,2}\/\d{1,2}\/\d{4}$/, // D/M/YYYY or M/D/YYYY
-        /Date\(\d{4},\d{1,2},\d{1,2}\)/, // Date(YYYY,M,D) format
-        /^(\w{3}\s\d{1,2},\s\d{4}|\d{1,2}\s\w{3}\s\d{4})$/ // e.g., Jan 15, 2024 or 15 Jan 2024
+        /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/,
+        /^\d{2}\/\d{2}\/\d{4}$/,
+        /^\d{1,2}\/\d{1,2}\/\d{4}$/,
+        /Date\(\d{4},\d{1,2},\d{1,2}\)/,
+        /^(\w{3}\s\d{1,2},\s\d{4}|\d{1,2}\s\w{3}\s\d{4})$/
       ];
 
       return datePatterns.some(pattern => pattern.test(value));
@@ -129,7 +119,6 @@ const Reports = () => {
     return false;
   };
 
-  // Function to format cell value based on its content
   const formatCellValue = (value, headerLabel = '') => {
     if (isDateValue(value, headerLabel)) {
       return formatDate(value);
@@ -137,7 +126,6 @@ const Reports = () => {
     return value || "—";
   };
 
-  // Function to fetch data from Supabase FMS table
   const fetchFMSData = async () => {
     try {
       setIsLoading(true);
@@ -151,7 +139,6 @@ const Reports = () => {
 
       console.log("🔄 Fetching data from Supabase FMS table...");
 
-      // Query the FMS table with only the columns you need
       const { data, error } = await supabase
         .from('FMS')
         .select(`
@@ -183,7 +170,6 @@ const Reports = () => {
 
       console.log("✅ FMS data loaded successfully from Supabase");
 
-      // Set headers for display
       const fmsHeaders = [
         { id: 'sales_person_name', label: 'Sales Person Name' },
         { id: 'dealer_name', label: 'Dealer Name' },
@@ -200,17 +186,14 @@ const Reports = () => {
 
       setSheetHeaders(fmsHeaders);
 
-      // Get all column keys for filtering
       const displayColumnKeys = Object.values(COLUMN_MAPPING);
 
-      // Process Supabase data to match your component structure
       const fmsItems = data.map((item, index) => {
         const itemObj = {
           _id: item.id || `${index}-${Math.random().toString(36).substr(2, 9)}`,
           _rowIndex: index + 1,
         };
 
-        // Populate both raw and formatted values
         fmsHeaders.forEach(header => {
           const rawValue = item[header.id];
           const colKey = COLUMN_MAPPING[header.id];
@@ -224,7 +207,6 @@ const Reports = () => {
         return itemObj;
       });
 
-      // Filter out empty rows using the displayColumnKeys
       const cleanedItems = fmsItems.filter((item) => {
         return displayColumnKeys.some(colKey => {
           const value = item[colKey];
@@ -247,37 +229,29 @@ const Reports = () => {
   };
 
   useEffect(() => {
-    // Only fetch data if authenticated and current user data is available
     if (isAuthenticated && currentUser) {
       fetchFMSData();
     } else if (!isAuthenticated) {
-      // If not authenticated, stop loading and show a message
       setIsLoading(false);
       setError("Please log in to view Reports data.");
     }
-  }, [isAuthenticated, currentUser]); // Depend on isAuthenticated and currentUser
+  }, [isAuthenticated, currentUser]);
 
   const filteredIndents = indents.filter((item) => {
     const term = searchTerm.toLowerCase();
 
-    // User-specific filter for regular users
-    // If userRole is "Admin", this condition is always true.
-    // If userRole is "User", it checks if the Sales Person Name (col4) matches the current user's name.
     const matchesUserSalesPerson = userRole.toLowerCase() === "admin" ||
       (String(item.col4 || "").toLowerCase() === currentUserSalesPersonName.toLowerCase());
 
-    // Get values from the relevant filter columns for general search/filters
     const salesPersonVal = String(item.col4 || "").toLowerCase();
     const dealerNameVal = String(item.col5 || "").toLowerCase();
     const lastActionVal = String(item.col21 || "").toLowerCase();
 
-    // Search term filter - searches across all displayed columns
     const matchesSearchTerm = DISPLAY_COLUMNS.some((colIndex) => {
       const value = item[`col${colIndex}`];
       return value && String(value).toLowerCase().includes(term);
     });
 
-    // Apply specific column filters
     const matchesSalesPersonFilter = salesPersonFilter
       ? salesPersonVal.includes(salesPersonFilter.toLowerCase())
       : true;
@@ -290,23 +264,19 @@ const Reports = () => {
       ? lastActionVal.includes(lastActionFilter.toLowerCase())
       : true;
 
-    // Combine all filters
     return matchesSearchTerm && matchesSalesPersonFilter && matchesDealerNameFilter && matchesLastActionFilter && matchesUserSalesPerson;
   });
 
   const exportData = () => {
     try {
       const csvContent = [
-        // Header row
         sheetHeaders.map((header) => header.label).join(","),
-        // Data rows with formatted values
-        ...filteredIndents.map((item) => // Use filteredIndents for export as well
+        ...filteredIndents.map((item) =>
           sheetHeaders
             .map((header) => {
               const colKey = COLUMN_MAPPING[header.id];
               const formattedValue = item[`${colKey}_formatted`] || "—";
 
-              // Escape commas and quotes in CSV
               return typeof formattedValue === "string" &&
                 (formattedValue.includes(",") || formattedValue.includes('"') || formattedValue.includes('\n'))
                 ? `"${String(formattedValue).replace(/"/g, '""')}"`
@@ -338,11 +308,167 @@ const Reports = () => {
     }
   };
 
+  // Mobile Card Component with fixed header and scrollable content
+  const MobileCardView = ({ items }) => {
+    return (
+      <div className="flex flex-col h-[calc(100vh-300px)] bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {/* Fixed Header */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 px-4 py-3">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
+              Dealer Records ({items.length})
+            </h3>
+            {/* <div className="text-xs text-slate-500">
+              Scroll to view more
+            </div> */}
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-4 p-4">
+            {items.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-slate-400 mb-2">
+                  <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-slate-500 font-medium">No results found.</p>
+                <p className="text-slate-400 text-sm mt-1">Try adjusting your search or filters</p>
+              </div>
+            ) : (
+              items.map((item) => (
+                <div
+                  key={item._id}
+                  className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 space-y-3 hover:shadow-md transition-shadow"
+                >
+                  {sheetHeaders.map((header, index) => {
+                    const colKey = COLUMN_MAPPING[header.id];
+                    const formattedValue = item[`${colKey}_formatted`] || "—";
+                    
+                    return (
+                      <div key={header.id} className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-slate-500 min-w-[120px] flex-shrink-0">
+                          {header.label}:
+                        </span>
+                        <span className="text-sm font-semibold text-slate-900 text-right flex-1 ml-2 break-words">
+                          {formattedValue}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Desktop Table Component with synchronized horizontal scrolling
+  const DesktopTableView = ({ items }) => {
+    const [scrollLeft, setScrollLeft] = useState(0);
+    const headerRef = React.useRef(null);
+    const bodyRef = React.useRef(null);
+
+    const handleBodyScroll = (e) => {
+      const scrollLeft = e.target.scrollLeft;
+      setScrollLeft(scrollLeft);
+      if (headerRef.current) {
+        headerRef.current.scrollLeft = scrollLeft;
+      }
+    };
+
+    const handleHeaderScroll = (e) => {
+      const scrollLeft = e.target.scrollLeft;
+      setScrollLeft(scrollLeft);
+      if (bodyRef.current) {
+        bodyRef.current.scrollLeft = scrollLeft;
+      }
+    };
+
+    return (
+      <div className="overflow-hidden rounded-xl border border-slate-200 shadow-sm bg-white">
+        {/* Fixed Header with horizontal scroll */}
+        <div 
+          ref={headerRef}
+          className="sticky top-0 z-20 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 overflow-hidden"
+          onScroll={handleHeaderScroll}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          <div className="min-w-max">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  {sheetHeaders.map((header) => (
+                    <th
+                      key={header.id}
+                      className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap min-w-[150px]"
+                    >
+                      {header.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            </table>
+          </div>
+        </div>
+
+        {/* Scrollable Body with synchronized horizontal scroll */}
+        <div 
+          ref={bodyRef}
+          className="overflow-auto max-h-[calc(100vh-400px)]"
+          onScroll={handleBodyScroll}
+        >
+          <div className="min-w-max">
+            <table className="w-full">
+              <tbody className="bg-white divide-y divide-slate-200">
+                {items.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={sheetHeaders.length}
+                      className="px-6 py-12 text-center text-slate-500 font-medium"
+                    >
+                      No results found.
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => (
+                    <tr
+                      key={item._id}
+                      className="hover:bg-slate-50 transition-colors duration-150"
+                    >
+                      {sheetHeaders.map((header) => {
+                        const colKey = COLUMN_MAPPING[header.id];
+                        const formattedValue = item[`${colKey}_formatted`] || "—";
+
+                        return (
+                          <td
+                            key={header.id}
+                            className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900 min-w-[150px]"
+                          >
+                            {formattedValue}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (!isAuthenticated || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50 to-teal-50 flex items-center justify-center">
         <div className="text-center">
-          {(!isAuthenticated && !isLoading) ? ( // If not authenticated and not loading, display login message
+          {(!isAuthenticated && !isLoading) ? (
             <>
               <div className="text-red-500 mb-4">
                 <svg
@@ -361,7 +487,7 @@ const Reports = () => {
               </div>
               <p className="text-slate-600 font-medium">Please log in to view this page.</p>
             </>
-          ) : ( // Otherwise, display loading spinner
+          ) : (
             <>
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
               <p className="text-slate-600 font-medium">Loading Reports data...</p>
@@ -413,33 +539,29 @@ const Reports = () => {
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Main Card */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-8 py-6">
+            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-6 lg:px-8">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                  <h3 className="text-2xl font-bold text-white mb-2">
+                <div className="text-center lg:text-left">
+                  <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
                     Dealer Performance Report
                   </h3>
-                  <p className="text-orange-50 text-lg">
-                    Comprehensive view of all dealers and their performance
-                    metrics
+                  <p className="text-orange-50 text-sm lg:text-lg">
+                    Comprehensive view of all dealers and their performance metrics
                   </p>
-                  {/* Display current user info for testing/debugging */}
-                  <p className="text-orange-100 text-sm mt-2">
+                  <p className="text-orange-100 text-xs lg:text-sm mt-2">
                     Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-3">
                   <div className="relative">
                     <button
-                      onClick={() =>
-                        setIsFilterDropdownOpen(!isFilterDropdownOpen)
-                      }
-                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
+                      onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm lg:text-base"
                       aria-expanded={isFilterDropdownOpen}
                       aria-haspopup="true"
                     >
-                      <Filter className="h-4 w-4 mr-2" />
-                      Filter
+                      <Filter className="h-4 w-4" />
+                      <span className="hidden sm:inline">Filter</span>
                     </button>
                     {isFilterDropdownOpen && (
                       <div className="absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-4">
@@ -449,7 +571,6 @@ const Reports = () => {
                           </div>
                           <div className="border-t border-gray-200 my-2"></div>
                           <div className="grid gap-4">
-                            {/* Filter for Sales Person Name (col E / index 4) */}
                             <div>
                               <label
                                 htmlFor="sales-person-filter"
@@ -466,7 +587,6 @@ const Reports = () => {
                                 className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
                               />
                             </div>
-                            {/* Filter for Dealer Name (col F / index 5) */}
                             <div>
                               <label
                                 htmlFor="dealer-name-filter"
@@ -483,7 +603,6 @@ const Reports = () => {
                                 className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
                               />
                             </div>
-                            {/* Filter for Last Action (col V / index 21) */}
                             <div>
                               <label
                                 htmlFor="last-action-filter"
@@ -507,78 +626,34 @@ const Reports = () => {
                   </div>
                   <button
                     onClick={exportData}
-                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
+                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm lg:text-base"
                   >
                     <Download className="h-4 w-4" />
-                    Export
+                    <span className="hidden sm:inline">Export</span>
                   </button>
                 </div>
               </div>
             </div>
-            <div className="p-8">
+            <div className="p-4 lg:p-8">
               <div className="flex items-center mb-6">
                 <div className="relative w-full max-w-md">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 lg:h-5 lg:w-5 text-slate-400" />
                   <input
                     type="search"
                     placeholder="Search dealers..."
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-700 font-medium"
+                    className="w-full pl-10 lg:pl-12 pr-4 py-2 lg:py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-700 font-medium text-sm lg:text-base"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-r from-slate-50 to-slate-100">
-                    <tr>
-                      {sheetHeaders.map((header) => (
-                        <th
-                          key={header.id}
-                          className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap"
-                        >
-                          {header.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-200">
-                    {filteredIndents.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={sheetHeaders.length}
-                          className="px-6 py-12 text-center text-slate-500 font-medium"
-                        >
-                          No results found.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredIndents.map((item) => (
-                        <tr
-                          key={item._id}
-                          className="hover:bg-slate-50 transition-colors duration-150"
-                        >
-                          {sheetHeaders.map((header) => {
-                            // Map the header back to the column key for data access
-                            const colKey = COLUMN_MAPPING[header.id];
-                            const formattedValue = item[`${colKey}_formatted`] || "—";
-
-                            return (
-                              <td
-                                key={header.id}
-                                className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900"
-                              >
-                                {formattedValue}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {/* Responsive Data Display */}
+              {isMobile ? (
+                <MobileCardView items={filteredIndents} />
+              ) : (
+                <DesktopTableView items={filteredIndents} />
+              )}
             </div>
           </div>
         </div>

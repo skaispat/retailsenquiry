@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useContext } from "react"; // Import useContext
 import { toast, Toaster } from "react-hot-toast";
-import { Download, Filter, Search, X } from "lucide-react";
+import { Download, Filter, Search, X, ChevronDown, ChevronUp } from "lucide-react";
 import { AuthContext } from "../App"; // Assuming AuthContext is defined in App.js or a similar path
 import supabase from "../SupaabseClient";
 
@@ -17,6 +17,7 @@ const History = () => {
   const [sheetHeaders, setSheetHeaders] = useState([]);
   const [error, setError] = useState(null);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [expandedCards, setExpandedCards] = useState(new Set());
 
   // Get user authentication context
   const { currentUser, isAuthenticated } = useContext(AuthContext);
@@ -281,6 +282,18 @@ const History = () => {
     }
   };
 
+  const toggleCardExpansion = (cardId) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(cardId)) {
+        newSet.delete(cardId);
+      } else {
+        newSet.add(cardId);
+      }
+      return newSet;
+    });
+  };
+
   // --- Loading and Error States (retained as they are functional) ---
   if (isLoading) {
     return (
@@ -327,44 +340,46 @@ const History = () => {
     );
   }
 
-  // --- Main Render Section - COMPLETELY REDESIGNED ---
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <Toaster position="top-right" />
-      <div className="container mx-auto p-8 pt-10"> {/* Overall padding and max-width for the content */}
-
+      <div className="container mx-auto p-4 lg:p-8 pt-6 lg:pt-10">
         {/* Dealer Interaction History Report Card */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 flex flex-col h-[calc(100vh-2rem)] lg:h-[calc(100vh-4rem)]">
           {/* Card Header with Gradient */}
-          <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white p-4 lg:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-2xl font-semibold mb-1">
+              <h3 className="text-xl lg:text-2xl font-semibold mb-1">
                 Interaction History
               </h3>
-              <p className="text-sm opacity-90">
+              <p className="text-xs lg:text-sm opacity-90">
                 View history of all dealer interactions
               </p>
+              <p className="text-xs text-green-100 mt-1">
+                Current User: <span className="font-semibold">{currentUserSalesPersonName}</span>
+                {userRole.toLowerCase() === "admin" && " - Admin View"}
+              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 lg:gap-3">
               {/* Filter Button */}
               <div className="relative">
                 <button
                   onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-white text-orange-600 hover:bg-gray-100 h-10 px-4 py-2 shadow-sm"
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-white text-orange-600 hover:bg-gray-100 h-9 lg:h-10 px-3 lg:px-4 py-2 shadow-sm"
                 >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filter
+                  <Filter className="h-4 w-4 mr-1 lg:mr-2" />
+                  <span className="hidden sm:inline">Filter</span>
                 </button>
                 {/* Filter Dropdown Content */}
                 {isFilterDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-20 p-4">
-                    <div className="block px-4 py-2 text-sm text-gray-700 font-semibold">
+                  <div className="absolute right-0 mt-2 w-48 lg:w-64 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-20 p-3 lg:p-4">
+                    <div className="block text-sm text-gray-700 font-semibold">
                       Filter by Columns
                     </div>
                     <div className="border-t border-gray-200 my-2"></div>
-                    <div className="grid gap-4">
+                    <div className="grid gap-3 lg:gap-4">
                       <div>
-                        <label htmlFor="dealer-code-filter" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="dealer-code-filter" className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
                           Dealer Code
                         </label>
                         <input
@@ -373,11 +388,11 @@ const History = () => {
                           placeholder="Filter by Dealer Code"
                           value={dealerCodeFilter}
                           onChange={(e) => setDealerCodeFilter(e.target.value)}
-                          className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                          className="flex h-8 lg:h-9 w-full rounded-md border border-gray-300 bg-white px-2 lg:px-3 py-1 lg:py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                         />
                       </div>
                       <div>
-                        <label htmlFor="stage-filter" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="stage-filter" className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
                           Stage
                         </label>
                         <input
@@ -386,7 +401,7 @@ const History = () => {
                           placeholder="Filter by Stage"
                           value={stageFilter}
                           onChange={(e) => setStageFilter(e.target.value)}
-                          className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                          className="flex h-8 lg:h-9 w-full rounded-md border border-gray-300 bg-white px-2 lg:px-3 py-1 lg:py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                         />
                       </div>
                     </div>
@@ -396,112 +411,207 @@ const History = () => {
               {/* Export Button */}
               <button
                 onClick={exportData}
-                className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-white text-orange-600 hover:bg-gray-100 h-10 px-4 py-2 shadow-sm"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-white text-orange-600 hover:bg-gray-100 h-9 lg:h-10 px-3 lg:px-4 py-2 shadow-sm"
               >
-                <Download className="h-4 w-4 mr-2" />
-                Export
+                <Download className="h-4 w-4 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">Export</span>
               </button>
             </div>
           </div>
 
-          {/* Card Body - Search and Table */}
-          <div className="p-8"> {/* Increased padding to match image */}
-            {/* Search Bar */}
-            <div className="relative mb-6">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+          {/* Search Bar - Fixed */}
+          <div className="flex-shrink-0 p-4 lg:p-6 border-b border-gray-200 bg-white">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 lg:h-5 w-4 lg:w-5 text-gray-400" />
               <input
                 type="search"
-                // Changed placeholder to match image
                 placeholder="Search dealers..."
-                className="flex h-12 w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-base pl-10 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                className="flex h-10 lg:h-12 w-full rounded-md border border-gray-300 bg-white px-3 lg:px-4 py-2 text-sm lg:text-base pl-10 lg:pl-12 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+          </div>
 
-            {/* Data Table */}
-            <div className="rounded-lg border border-gray-200 overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {sheetHeaders.map((header) => (
-                      <th
-                        key={header.id}
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap"
-                      >
-                        {header.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredIndents.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={sheetHeaders.length}
-                        className="px-6 py-12 text-center text-gray-500 font-medium text-base"
-                      >
-                        {searchTerm || dealerCodeFilter || stageFilter
-                          ? "No results found for your current filters."
-                          : "No interaction data found."}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredIndents.map((item) => (
-                      <tr
-                        key={item._id}
-                        className="hover:bg-gray-50 cursor-pointer transition duration-150 ease-in-out"
-                        onClick={() => {
-                          setSelectedIndent(item);
-                          setIsDialogOpen(true);
-                        }}
-                      >
+          {/* Scrollable Content Section */}
+          <div className="flex-1 overflow-hidden">
+            {/* Desktop Table View (hidden on mobile) */}
+            <div className="hidden lg:block h-full">
+              <div className="h-full flex flex-col">
+                {/* Scrollable Table Container */}
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full">
+                    {/* Fixed Table Header */}
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
                         {sheetHeaders.map((header) => (
-                          <td
+                          <th
                             key={header.id}
-                            className="px-6 py-4 whitespace-nowrap text-sm text-gray-800"
+                            scope="col"
+                            className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap"
                           >
-                            {formatCellValue(item[header.id], header.label)}
-                          </td>
+                            {header.label}
+                          </th>
                         ))}
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    
+                    {/* Scrollable Table Body */}
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredIndents.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={sheetHeaders.length}
+                            className="px-6 py-12 text-center text-gray-500 font-medium text-base"
+                          >
+                            {searchTerm || dealerCodeFilter || stageFilter
+                              ? "No results found for your current filters."
+                              : "No interaction data found."}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredIndents.map((item) => (
+                          <tr
+                            key={item._id}
+                            className="hover:bg-gray-50 cursor-pointer transition duration-150 ease-in-out"
+                            onClick={() => {
+                              setSelectedIndent(item);
+                              setIsDialogOpen(true);
+                            }}
+                          >
+                            {sheetHeaders.map((header) => (
+                              <td
+                                key={header.id}
+                                className="px-6 py-4 whitespace-nowrap text-sm text-gray-800"
+                              >
+                                {formatCellValue(item[header.id], header.label)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile Card View (hidden on desktop) */}
+            <div className="lg:hidden h-full overflow-auto">
+              {filteredIndents.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-gray-500 font-medium">
+                    {searchTerm || dealerCodeFilter || stageFilter
+                      ? "No results found for your current filters."
+                      : "No interaction data found."}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 space-y-4">
+                  {filteredIndents.map((item) => {
+                    const isExpanded = expandedCards.has(item._id);
+                    const primaryFields = sheetHeaders.slice(0, 4); // First 4 fields for collapsed view
+                    const secondaryFields = sheetHeaders.slice(4); // Remaining fields for expanded view
+
+                    return (
+                      <div
+                        key={item._id}
+                        className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+                      >
+                        {/* Card Header - Always Visible */}
+                        <div 
+                          className="p-4 border-b border-gray-100 cursor-pointer"
+                          onClick={() => toggleCardExpansion(item._id)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h3 className="font-bold text-gray-900 text-base mb-2">
+                                {item.dealer_code || "Unknown Dealer"}
+                              </h3>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                {primaryFields.map((header) => (
+                                  <div key={header.id}>
+                                    <span className="text-gray-500 font-medium">{header.label}:</span>
+                                    <p className="text-gray-900 font-semibold truncate">
+                                      {formatCellValue(item?.[header.id], header.label)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <button className="ml-2 text-gray-400 hover:text-gray-600 transition-colors">
+                              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expandable Content */}
+                        {isExpanded && (
+                          <div className="p-4 bg-gray-50 border-t border-gray-200">
+                            <div className="space-y-2">
+                              {secondaryFields.map((header) => (
+                                <div key={header.id} className="flex justify-between items-start">
+                                  <span className="text-gray-600 font-medium text-xs flex-shrink-0 mr-2">
+                                    {header.label}:
+                                  </span>
+                                  <span className="text-gray-900 font-semibold text-xs text-right break-words flex-1">
+                                    {formatCellValue(item?.[header.id], header.label)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {/* View Details Button */}
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <button
+                                className="w-full bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 border border-orange-200 hover:from-orange-200 hover:to-orange-100 font-medium py-2 rounded-lg text-xs flex items-center justify-center gap-2 transition-all duration-200"
+                                onClick={() => {
+                                  setSelectedIndent(item);
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                View Full Details
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* View Details Dialog - Maintained original functionality but with subtle style updates */}
+      {/* View Details Dialog */}
       {isDialogOpen && selectedIndent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in-0 p-4">
-          <div className="relative w-full max-w-3xl rounded-lg bg-white p-6 shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto transform scale-100 opacity-100">
-            <div className="flex items-center justify-between border-b pb-4 mb-4">
-              <h2 className="text-2xl font-bold text-gray-800">
+          <div className="relative w-full max-w-3xl rounded-lg bg-white p-4 lg:p-6 shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto transform scale-100 opacity-100">
+            <div className="flex items-center justify-between border-b pb-3 lg:pb-4 mb-3 lg:mb-4">
+              <h2 className="text-xl lg:text-2xl font-bold text-gray-800">
                 Interaction Details
               </h2>
               <button
                 onClick={() => setIsDialogOpen(false)}
-                className="rounded-full p-2 text-gray-500 hover:bg-gray-100 transition-colors"
+                className="rounded-full p-1 lg:p-2 text-gray-500 hover:bg-gray-100 transition-colors"
                 aria-label="Close"
               >
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5 lg:h-6 lg:w-6" />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 lg:gap-x-6 gap-y-3 lg:gap-y-4 py-1 lg:py-2">
               {sheetHeaders.map((header) => {
                 const value = selectedIndent[header.id];
                 if (value && String(value).trim() !== "") {
                   return (
                     <div key={header.id} className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500">
+                      <span className="text-xs lg:text-sm font-medium text-gray-500">
                         {header.label}
                       </span>
-                      <span className="text-base font-semibold text-gray-900 break-words">
+                      <span className="text-sm lg:text-base font-semibold text-gray-900 break-words">
                         {formatCellValue(value, header.label)}
                       </span>
                     </div>
@@ -511,10 +621,10 @@ const History = () => {
               })}
             </div>
 
-            <div className="flex justify-end border-t pt-4 mt-6">
+            <div className="flex justify-end border-t pt-3 lg:pt-4 mt-4 lg:mt-6">
               <button
                 onClick={() => setIsDialogOpen(false)}
-                className="inline-flex items-center justify-center rounded-md text-base font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 h-10 px-5 py-2 transition-colors shadow-sm"
+                className="inline-flex items-center justify-center rounded-md text-sm lg:text-base font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 h-9 lg:h-10 px-4 lg:px-5 py-2 transition-colors shadow-sm"
               >
                 Close
               </button>

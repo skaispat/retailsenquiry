@@ -89,7 +89,8 @@ export default function TrackerDialog({
         "Call",
         "Call not picked",
         "Order Closed",
-        "Order Pending"
+        "Order Pending",
+         "Site Visit", 
       ];
     } else {
       // For Dealer and Distributor - original options
@@ -98,16 +99,16 @@ export default function TrackerDialog({
         "Call",
         "Call Not Picked",
         "Introductory Call",
-        "First Visit/ Call",
-        "Site Visit",
-        "Quotation Sent",
+        "First Visit",
+        // "Site Visit",
+        // "Quotation Sent",
         "Order Received",
         "Order Not Received",
         "Not Interested",
         "Payment Enquiry",
         ...stages.filter(stage => ![
           "Follow-Up", "Call", "Call Not Picked", "Introductory Call", 
-          "First Visit/ Call", "Site Visit", "Quotation Sent", 
+          "First Visit",
           "Order Received", "Order Not Received", "Not Interested", 
           "Payment Enquiry"
         ].includes(stage))
@@ -219,7 +220,7 @@ export default function TrackerDialog({
       "Call Not Picked",
       "Introductory Call",
       "Call",
-      "First Visit/ Call",
+      "First Visit",
       "Follow-up", // For Site/Engineer
       "Call not picked" // For Site/Engineer
     ].includes(formData.stage);

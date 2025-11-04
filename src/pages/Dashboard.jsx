@@ -55,6 +55,9 @@ function Dashboard() {
     value_of_order: { label: "Value of Order", property: "value_of_order", type: "number" },
     last_order_before: { label: "Last Order Before", property: "last_order_before", type: "date" },
     area_name: { label: "Area Name", property: "area_name", type: "text" },
+    select_value: { label: "Select Value", property: "select_value", type: "text" },
+    planned: { label: "Planned", property: "planned", type: "text" },
+    actual: { label: "Actual", property: "actual", type: "text" },
   };
 
   const FMS_DISPLAY_COLUMNS_FOR_DIALOG = [
@@ -74,6 +77,9 @@ function Dashboard() {
     "value_of_order",
     "last_order_before",
     "area_name",
+    "select_value",
+    "planned",
+    "actual",
   ];
 
   const formatDate = (dateValue) => {
@@ -154,8 +160,10 @@ function Dashboard() {
               value_of_order: row.value_of_order,
               last_order_before: row.last_order_before,
               area_name: row.area_name,
-              // Add select_value if it exists
+              // Add the new columns
               select_value: row.select_value,
+              planned: row.planned,
+              actual: row.actual,
             };
 
             // Apply formatting for date fields
@@ -268,18 +276,49 @@ function Dashboard() {
     
     setTotalCount(currentFilteredData.length);
     
-    const dealers = new Set(currentFilteredData.map(row => row.dealer_code).filter(Boolean));
-    setActiveDealersCount(dealers.size);
+    // Updated logic for active dealers count
+    const activeDealers = new Set();
+    
+    currentFilteredData.forEach(row => {
+      const dealerCode = row.dealer_code;
+      const selectValue = row.select_value;
+      const planned = row.planned;
+      const actual = row.actual;
+      
+      // Check if this row meets the criteria for active dealer
+      if (dealerCode && 
+          selectValue === "Dealer" && 
+          planned !== null && 
+          planned !== undefined && 
+          planned !== "" && 
+          (actual === null || actual === undefined || actual === "")) {
+        activeDealers.add(dealerCode);
+      }
+    });
+    
+    setActiveDealersCount(activeDealers.size);
     
     const ordersCount = currentFilteredData.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "").length;
     setTotalOrdersCount(ordersCount);
 
-    const pendingCount = currentFilteredData.filter(row => {
-      const stage = row.status ? String(row.status).trim().toLowerCase() : '';
-      return stage !== "order received" && stage !== "order not received";
-    }).length;
+    // const pendingCount = currentFilteredData.filter(row => {
+    //   const stage = row.status ? String(row.status).trim().toLowerCase() : '';
+    //   return stage !== "order received" && stage !== "order not received";
+    // }).length;
 
-    setPendingEnquiriesCount(pendingCount);
+    // setPendingEnquiriesCount(pendingCount);
+
+    const pendingCount = currentFilteredData.filter(row => {
+  const planned = row.planned;
+  const actual = row.actual;
+  
+  return planned !== null && 
+         planned !== undefined && 
+         planned !== "" && 
+         (actual === null || actual === undefined || actual === "");
+}).length;
+
+setPendingEnquiriesCount(pendingCount);
   }, [currentFilteredData]);
 
   const handleCardClick = (kpiType) => {
@@ -300,8 +339,19 @@ function Dashboard() {
       title = "Active Dealers";
       const uniqueDealerCodes = new Set();
       dataForDialog = dataToFilter.filter(row => {
-        if (row.dealer_code && !uniqueDealerCodes.has(row.dealer_code)) {
-          uniqueDealerCodes.add(row.dealer_code);
+        const dealerCode = row.dealer_code;
+        const selectValue = row.select_value;
+        const planned = row.planned;
+        const actual = row.actual;
+        
+        if (dealerCode && 
+            !uniqueDealerCodes.has(dealerCode) &&
+            selectValue === "Dealer" && 
+            planned !== null && 
+            planned !== undefined && 
+            planned !== "" && 
+            (actual === null || actual === undefined || actual === "")) {
+          uniqueDealerCodes.add(dealerCode);
           return true;
         }
         return false;
@@ -472,7 +522,6 @@ function Dashboard() {
       </div>
     );
   }
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-3 sm:p-6">

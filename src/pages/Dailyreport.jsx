@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useContext } from "react";
 import { toast, Toaster } from "react-hot-toast";
-import { Download, Search, X } from "lucide-react";
+import { Download, Search, X, Filter, Calendar, User, Building } from "lucide-react";
 import { AuthContext } from "../App";
 import supabase from "../SupaabseClient";
 
@@ -16,12 +16,26 @@ const DailyReport = () => {
   const [dateFilter, setDateFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Get user authentication context
   const { currentUser, isAuthenticated } = useContext(AuthContext);
 
   const userRole = currentUser?.role || "User";
   const currentUserSalesPersonName = currentUser?.salesPersonName || "Unknown User";
+
+  // Check screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   // Updated column mapping based on your tracking_history schema
   const COLUMN_MAPPINGS = {
@@ -40,10 +54,17 @@ const DailyReport = () => {
   // Select which columns to display in the table
   const DISPLAY_HEADERS = [
     { id: 'created_at', label: 'Timestamp' },
-    { id: 'deler_distributer_site_name', label: 'Dealer/Distributer/Site Name' },
-    { id: 'sales_person_name', label: 'Sales Person Name' },
+    { id: 'deler_distributer_site_name', label: 'Dealer Name' },
+    { id: 'sales_person_name', label: 'Sales Person' },
     { id: 'what_did_customer_says', label: 'Remark' },
     { id: 'next_action', label: 'Next Action' },
+  ];
+
+  // Mobile display headers (shorter)
+  const MOBILE_HEADERS = [
+    { id: 'created_at', label: 'Time' },
+    { id: 'deler_distributer_site_name', label: 'Dealer' },
+    { id: 'what_did_customer_says', label: 'Remark' },
   ];
 
   // Format date with time
@@ -136,10 +157,10 @@ const DailyReport = () => {
       console.log('Sample record:', formattedData[0]);
       setTrackingData(formattedData);
       
-      toast.success(`Loaded ${formattedData.length} records successfully`, {
-        duration: 3000,
-        position: "top-right",
-      });
+      // toast.success(`Loaded ${formattedData.length} records successfully`, {
+      //   duration: 3000,
+      //   position: "top-right",
+      // });
 
     } catch (err) {
       console.error("❌ Error fetching tracking data:", err);
@@ -207,7 +228,7 @@ const DailyReport = () => {
     });
 
     // Dealer filter
-    const matchesDealer = !dealerFilter || item.dealer_name === dealerFilter;
+    const matchesDealer = !dealerFilter || item.deler_distributer_site_name === dealerFilter;
 
     // Sales person filter
     const matchesSalesPerson = !salesPersonFilter || item.sales_person_name === salesPersonFilter;
@@ -307,12 +328,150 @@ const DailyReport = () => {
     }
   };
 
+  // Mobile Card Component
+  const MobileCardView = ({ items }) => {
+    return (
+      <div className="flex flex-col h-[calc(100vh-280px)] bg-white rounded-lg border border-gray-200 overflow-hidden">
+        {/* Fixed Header */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-3">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
+              Records ({items.length})
+            </h3>
+            <div className="text-xs text-gray-500">
+              Scroll to view
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-3 p-4">
+            {items.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-gray-400 mb-2">
+                  <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-gray-500 font-medium">No records found</p>
+                <p className="text-gray-400 text-sm mt-1">Try adjusting your filters</p>
+              </div>
+            ) : (
+              items.map((item) => (
+                <div
+                  key={item._id}
+                  className="bg-white rounded-lg border border-gray-200 p-4 space-y-3 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => {
+                    setSelectedRecord(item);
+                    setIsDialogOpen(true);
+                  }}
+                >
+                  {MOBILE_HEADERS.map((header, index) => {
+                    const value = item[header.id] || "—";
+                    return (
+                      <div key={header.id} className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-gray-500 min-w-[80px] flex-shrink-0">
+                          {header.label}:
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900 text-right flex-1 ml-2 break-words">
+                          {value}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div className="pt-2 border-t border-gray-100">
+                    <span className="text-xs text-blue-600 font-medium">Tap to view details →</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Desktop Table Component
+  const DesktopTableView = ({ items }) => {
+    return (
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+        {/* SCROLLABLE TABLE CONTENT */}
+        <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                {DISPLAY_HEADERS.map((header) => (
+                  <th
+                    key={header.id}
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap bg-gray-50"
+                  >
+                    {header.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {items.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={DISPLAY_HEADERS.length}
+                    className="px-6 py-12 text-center text-gray-500 font-medium text-base"
+                  >
+                    {dateFilter 
+                      ? `No records found for ${new Date(dateFilter).toLocaleDateString('en-GB')}`
+                      : "No tracking data found."}
+                    {(searchTerm || dealerFilter || salesPersonFilter) && (
+                      <div className="text-sm mt-2">Try clearing the search or filter options.</div>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                items.map((item) => (
+                  <tr
+                    key={item._id}
+                    className="hover:bg-gray-50 cursor-pointer transition duration-150 ease-in-out"
+                    onClick={() => {
+                      setSelectedRecord(item);
+                      setIsDialogOpen(true);
+                    }}
+                  >
+                    {DISPLAY_HEADERS.map((header) => (
+                      <td
+                        key={header.id}
+                        className="px-6 py-4 text-sm text-gray-800"
+                      >
+                        <div className="max-w-xs truncate" title={item[header.id]}>
+                          {item[header.id] || "—"}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Show record count */}
+        {items.length > 0 && (
+          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600 text-center">
+            Showing {items.length} records
+            {dateFilter && ` for ${new Date(dateFilter).toLocaleDateString('en-GB')}`}
+            {(dealerFilter || salesPersonFilter) && " (filtered)"}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading tracking data...</p>
+          <p className="text-slate-600 font-medium">Loading tracking data...</p>
         </div>
       </div>
     );
@@ -320,7 +479,7 @@ const DailyReport = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
           <div className="text-red-500 mb-4">
             <svg
@@ -353,194 +512,198 @@ const DailyReport = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans p-4">
+    <>
       <Toaster position="top-right" />
-      
-      {/* MAIN WRAPPER CONTAINER */}
-      <div className="max-w-full mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
-        
-        {/* HEADER SECTION */}
-        <div className="sticky top-0 z-8 bg-white shadow-md">
-          {/* Gradient Title Section */}
-          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-purple-700 text-white px-4 py-4">
-            <div className="container mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold">
-                  Daily Report
-                </h1>
-                <p className="text-sm opacity-90 mt-1">
-                  Tracking History & Dealer Interactions
-                </p>
-                <p className="text-orange-100 text-xs mt-1">
-                  Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
-                </p>
-              </div>
-              <button
-                onClick={downloadPDF}
-                disabled={filteredTrackingData.length === 0}
-                className="inline-flex items-center gap-2 bg-white text-blue-600 hover:bg-blue-50 font-medium px-5 py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-              >
-                <Download className="h-4 w-4" />
-                Download PDF
-              </button>
-            </div>
-          </div>
-
-          {/* Filters Section */}
-          <div className="bg-white px-4 md:px-10 py-4 border-b border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                <input
-                  type="search"
-                  placeholder="Search records..."
-                  className="w-full h-10 pl-9 pr-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-
-              {/* Date Filter */}
-              <div>
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => {
-                    setDateFilter(e.target.value);
-                    setDealerFilter('');
-                    setSalesPersonFilter('');
-                  }}
-                  className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  title="Select date to view records"
-                />
-              </div>
-
-              {/* Dealer Dropdown */}
-              <div>
-                <select
-                  value={dealerFilter}
-                  onChange={(e) => setDealerFilter(e.target.value)}
-                  className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white appearance-none cursor-pointer"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
-                    backgroundPosition: 'right 0.5rem center',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundSize: '1.5em 1.5em',
-                    paddingRight: '2.5rem'
-                  }}
-                >
-                  <option value="">All Dealers ({uniqueDealers.length})</option>
-                  {uniqueDealers.map(dealer => (
-                    <option key={dealer} value={dealer}>{dealer}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Sales Person Dropdown */}
-              <div>
-                <select
-                  value={salesPersonFilter}
-                  onChange={(e) => setSalesPersonFilter(e.target.value)}
-                  className="w-full h-10 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white appearance-none cursor-pointer"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
-                    backgroundPosition: 'right 0.5rem center',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundSize: '1.5em 1.5em',
-                    paddingRight: '2.5rem'
-                  }}
-                >
-                  <option value="">All Sales Persons ({uniqueSalesPersons.length})</option>
-                  {uniqueSalesPersons.map(person => (
-                    <option key={person} value={person}>{person}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* TABLE SECTION */}
-        <div className="px-4 md:px-10 py-8">
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
-            
-            {/* SCROLLABLE TABLE CONTENT */}
-            <div className="overflow-auto" style={{ maxHeight: '75vh' }}>
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    {DISPLAY_HEADERS.map((header) => (
-                      <th
-                        key={header.id}
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap bg-gray-50"
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-4 lg:p-8">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Main Card */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+            {/* Header Section */}
+            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-6 lg:px-8">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="text-center lg:text-left">
+                  <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
+                    Daily Report
+                  </h3>
+                  <p className="text-orange-50 text-sm lg:text-lg">
+                    Tracking History & Dealer Interactions
+                  </p>
+                  <p className="text-orange-100 text-xs lg:text-sm mt-2">
+                    Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {/* Mobile Filter Toggle */}
+                  {isMobile && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setIsFilterOpen(!isFilterOpen)}
+                        className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 flex items-center gap-2"
                       >
-                        {header.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredTrackingData.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={DISPLAY_HEADERS.length}
-                        className="px-6 py-12 text-center text-gray-500 font-medium text-base"
-                      >
-                        {dateFilter 
-                          ? `No records found for ${new Date(dateFilter).toLocaleDateString('en-GB')}`
-                          : "No tracking data found."}
-                        {(searchTerm || dealerFilter || salesPersonFilter) && (
-                          <div className="text-sm mt-2">Try clearing the search or filter options.</div>
-                        )}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredTrackingData.map((item) => (
-                      <tr
-                        key={item._id}
-                        className="hover:bg-gray-50 cursor-pointer transition duration-150 ease-in-out"
-                        onClick={() => {
-                          setSelectedRecord(item);
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        {DISPLAY_HEADERS.map((header) => (
-                          <td
-                            key={header.id}
-                            className="px-6 py-4 text-sm text-gray-800"
-                          >
-                            <div className="max-w-xs truncate" title={item[header.id]}>
-                              {item[header.id] || "—"}
-                            </div>
-                          </td>
-                        ))}
-                      </tr>
-                    ))
+                        <Filter className="h-4 w-4" />
+                        Filters
+                      </button>
+                    </div>
                   )}
-                </tbody>
-              </table>
+                  <button
+                    onClick={downloadPDF}
+                    disabled={filteredTrackingData.length === 0}
+                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span className="hidden sm:inline">Export PDF</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Show record count */}
-            {filteredTrackingData.length > 0 && (
-              <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600 text-center">
-                Showing {filteredTrackingData.length} records
-                {dateFilter && ` for ${new Date(dateFilter).toLocaleDateString('en-GB')}`}
-                {(dealerFilter || salesPersonFilter) && " (filtered)"}
-              </div>
-            )}
+            {/* Filters Section */}
+            <div className="p-4 lg:p-8">
+              {/* Mobile Filter Dropdown */}
+              {isMobile && isFilterOpen && (
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="search"
+                      placeholder="Search records..."
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Calendar className="h-4 w-4" />
+                      <span>Date Filter</span>
+                    </div>
+                    <input
+                      type="date"
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Building className="h-4 w-4" />
+                      <span>Dealer Filter</span>
+                    </div>
+                    <select
+                      value={dealerFilter}
+                      onChange={(e) => setDealerFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Dealers</option>
+                      {uniqueDealers.map(dealer => (
+                        <option key={dealer} value={dealer}>{dealer}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <User className="h-4 w-4" />
+                      <span>Sales Person</span>
+                    </div>
+                    <select
+                      value={salesPersonFilter}
+                      onChange={(e) => setSalesPersonFilter(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Sales Persons</option>
+                      {uniqueSalesPersons.map(person => (
+                        <option key={person} value={person}>{person}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Filters */}
+              {!isMobile && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="search"
+                      placeholder="Search records..."
+                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <input
+                      type="date"
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <select
+                      value={dealerFilter}
+                      onChange={(e) => setDealerFilter(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Dealers</option>
+                      {uniqueDealers.map(dealer => (
+                        <option key={dealer} value={dealer}>{dealer}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <select
+                      value={salesPersonFilter}
+                      onChange={(e) => setSalesPersonFilter(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="">All Sales Persons</option>
+                      {uniqueSalesPersons.map(person => (
+                        <option key={person} value={person}>{person}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile Search Bar (when filters are closed) */}
+              {isMobile && !isFilterOpen && (
+                <div className="mb-4 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="search"
+                    placeholder="Search records..."
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {/* Data Display */}
+              {isMobile ? (
+                <MobileCardView items={filteredTrackingData} />
+              ) : (
+                <DesktopTableView items={filteredTrackingData} />
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* View Details Dialog */}
       {isDialogOpen && selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in-0 p-4">
-          <div className="relative w-full max-w-3xl rounded-lg bg-white p-6 shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto transform scale-100 opacity-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-3xl rounded-lg bg-white p-6 shadow-2xl max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
-              <h2 className="text-2xl font-bold text-gray-800">
+              <h2 className="text-xl lg:text-2xl font-bold text-gray-800">
                 Tracking Record Details
               </h2>
               <button
@@ -553,7 +716,6 @@ const DailyReport = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 py-2">
-              {/* Show all available fields from the record */}
               {Object.keys(COLUMN_MAPPINGS).map((label) => {
                 const columnId = COLUMN_MAPPINGS[label];
                 const value = selectedRecord[columnId];
@@ -576,7 +738,7 @@ const DailyReport = () => {
             <div className="flex justify-end border-t pt-4 mt-6">
               <button
                 onClick={() => setIsDialogOpen(false)}
-                className="inline-flex items-center justify-center rounded-md text-base font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 h-10 px-5 py-2 transition-colors shadow-sm"
+                className="inline-flex items-center justify-center rounded-md text-base font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 h-10 px-5 py-2 transition-colors"
               >
                 Close
               </button>
@@ -584,7 +746,7 @@ const DailyReport = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

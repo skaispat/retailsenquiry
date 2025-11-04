@@ -18,6 +18,7 @@ import Sidebar from "./components/Sidebaar";
 import DailyReport from "./pages/Dailyreport";
 import AdminLogs from "./pages/AdminLogs";
 import supabase from "./SupaabseClient";
+import AttendanceHistoryPage from "./pages/AttendanceHistoryPage";
 
 export const AuthContext = createContext(null);
 
@@ -28,7 +29,7 @@ const App = () => {
   const [userType, setUserType] = useState(null);
   const [tabs, setTabs] = useState([]);
   const [autoLogoutTimer, setAutoLogoutTimer] = useState(null);
-  const [hasLoggedInitialActivity, setHasLoggedInitialActivity] = useState(false);
+  const [firstLoginTime, setFirstLoginTime] = useState(null);
 
   // Helper function for case-insensitive admin check
   const isAdminUser = (role) => {
@@ -39,6 +40,7 @@ const App = () => {
     const auth = localStorage.getItem("isAuthenticated");
     const storedUser = localStorage.getItem("currentUser");
     const storedUserType = localStorage.getItem("userType");
+    const storedFirstLoginTime = localStorage.getItem("firstLoginTime");
 
     if (auth === "true" && storedUser) {
       const parsedUser = JSON.parse(storedUser);
@@ -49,9 +51,6 @@ const App = () => {
         setCurrentUser(parsedUser);
         setUserType(parsedUser.role);
         setTabs(parsedUser.tabs || []);
-        
-        // Don't log login activity here - only log during actual login
-        // Don't setup auto logout for admin users
       } else {
         // For regular users, check if they are allowed to login today
         checkLoginAccess(parsedUser.username).then((canLogin) => {
@@ -61,10 +60,15 @@ const App = () => {
             setUserType(parsedUser.role);
             setTabs(parsedUser.tabs || []);
             
-            // Don't log login activity here - only log during actual login
-            
-            // Setup auto logout at 9 PM
-            setupAutoLogout();
+            // Restore first login time if available
+            if (storedFirstLoginTime) {
+              const loginTime = new Date(parseInt(storedFirstLoginTime));
+              setFirstLoginTime(loginTime);
+              setupAutoLogoutFromFirstLogin(loginTime);
+            } else {
+              // If no stored first login time, setup auto logout from now
+              setupAutoLogout();
+            }
           } else {
             // Clear storage if access denied
             localStorage.clear();
@@ -94,8 +98,12 @@ const App = () => {
         return true; // Allow login if there's an error checking
       }
 
-      // If user has a logout time for today, deny access
+      // If user has a logout time for today, check if admin granted access
       if (data && data.length > 0 && data[0].logout_time) {
+        // Check if access was requested and granted
+        if (data[0].access_requested && data[0].access_granted) {
+          return true;
+        }
         return false;
       }
 
@@ -106,7 +114,41 @@ const App = () => {
     }
   };
 
-  // Function to log user activity - ONLY call this during actual login/logout
+  // Function to get first login time of the day for a user
+  const getFirstLoginTime = async (username) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data, error } = await supabase
+        .from('user_logs')
+        .select('login_time, login_date')
+        .eq('user_name', username)
+        .eq('login_date', today)
+        .order('login_time', { ascending: true })
+        .limit(1);
+
+      if (error) {
+        console.error("Error getting first login time:", error);
+        return null;
+      }
+
+      if (data && data.length > 0) {
+        const loginTimeStr = data[0].login_time;
+        const loginDateStr = data[0].login_date;
+        
+        // Combine date and time to create a proper Date object
+        const loginDateTime = new Date(`${loginDateStr}T${loginTimeStr}`);
+        return loginDateTime;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error in getFirstLoginTime:", error);
+      return null;
+    }
+  };
+
+  // Function to log user activity
   const logUserActivity = async (username, action) => {
     try {
       const now = new Date();
@@ -144,7 +186,8 @@ const App = () => {
               login_date: loginDate,
               login_time: loginTime,
               logout_time: null,
-              access_requested: false
+              access_requested: false,
+              access_granted: false
             }
           ]);
 
@@ -177,25 +220,24 @@ const App = () => {
     }
   };
 
-  // Function to setup auto logout at 9 PM (only for regular users)
-  const setupAutoLogout = () => {
+  // Function to setup auto logout from first login time (9 hours from first login)
+  const setupAutoLogoutFromFirstLogin = (firstLoginTime) => {
     // Don't setup auto logout for admin users
     if (isAdminUser(currentUser?.role)) {
       return;
     }
 
     const now = new Date();
-    const ninePM = new Date();
-    ninePM.setHours(21, 0, 0, 0); // 9:00 PM
+    const logoutTime = new Date(firstLoginTime.getTime() + (9 * 60 * 60 * 1000)); // 9 hours from first login
 
     let timeUntilLogout;
     
-    if (now > ninePM) {
-      // If it's already past 9 PM, logout immediately
+    if (now > logoutTime) {
+      // If it's already past logout time, logout immediately
       timeUntilLogout = 0;
     } else {
-      // Calculate time until 9 PM
-      timeUntilLogout = ninePM - now;
+      // Calculate time until logout time
+      timeUntilLogout = logoutTime - now;
     }
 
     // Clear existing timer
@@ -204,11 +246,36 @@ const App = () => {
     }
 
     const timer = setTimeout(() => {
-      showNotification("Auto logout: Session ended at 9:00 PM", "info");
+      showNotification("Auto logout: Session ended after 9 hours", "info");
       handleAutoLogout();
     }, timeUntilLogout);
 
     setAutoLogoutTimer(timer);
+    console.log(`Auto logout scheduled at: ${logoutTime.toLocaleString()}`);
+  };
+
+  // Function to setup auto logout from current time (for first login)
+  const setupAutoLogout = () => {
+    // Don't setup auto logout for admin users
+    if (isAdminUser(currentUser?.role)) {
+      return;
+    }
+
+    const now = new Date();
+    const logoutTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // 9 hours from now
+
+    // Clear existing timer
+    if (autoLogoutTimer) {
+      clearTimeout(autoLogoutTimer);
+    }
+
+    const timer = setTimeout(() => {
+      showNotification("Auto logout: Session ended after 9 hours", "info");
+      handleAutoLogout();
+    }, 9 * 60 * 60 * 1000);
+
+    setAutoLogoutTimer(timer);
+    console.log(`Auto logout scheduled at: ${logoutTime.toLocaleString()}`);
   };
 
   // Function to handle auto logout
@@ -221,6 +288,7 @@ const App = () => {
     setCurrentUser(null);
     setUserType(null);
     setTabs([]);
+    setFirstLoginTime(null);
     localStorage.clear();
     
     if (autoLogoutTimer) {
@@ -253,6 +321,34 @@ const App = () => {
       return true;
     } catch (error) {
       console.error("Error in requestAccess:", error);
+      return false;
+    }
+  };
+
+  // Function to grant access (for admin)
+  const grantAccess = async (username) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { error } = await supabase
+        .from('user_logs')
+        .update({ 
+          access_granted: true,
+          grant_time: new Date().toTimeString().split(' ')[0]
+        })
+        .eq('user_name', username)
+        .eq('login_date', today)
+        .order('login_time', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error("Error granting access:", error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error in grantAccess:", error);
       return false;
     }
   };
@@ -300,6 +396,7 @@ const App = () => {
                 "History",
                 "Reports",
                 "Attendance",
+                "Attendance History",
                 "Daily Report",
                 ...(userIsAdmin ? ["Admin Logs"] : [])
               ]
@@ -316,12 +413,26 @@ const App = () => {
         localStorage.setItem("currentUser", JSON.stringify(userInfo));
         localStorage.setItem("userType", userInfo.role);
 
-        // Log login activity ONLY HERE - during actual login
+        // Log login activity
         await logUserActivity(username, 'login');
 
-        // Setup auto logout (only for regular users)
+        // For regular users, setup auto logout
         if (!userIsAdmin) {
-          setupAutoLogout();
+          // Get first login time of the day
+          const firstLogin = await getFirstLoginTime(username);
+          
+          if (firstLogin) {
+            // Use the first login time of the day
+            setFirstLoginTime(firstLogin);
+            localStorage.setItem("firstLoginTime", firstLogin.getTime().toString());
+            setupAutoLogoutFromFirstLogin(firstLogin);
+          } else {
+            // If no first login found (shouldn't happen), use current time
+            const now = new Date();
+            setFirstLoginTime(now);
+            localStorage.setItem("firstLoginTime", now.getTime().toString());
+            setupAutoLogout();
+          }
         }
 
         showNotification(`Welcome, ${username}!`, "success");
@@ -338,7 +449,7 @@ const App = () => {
   };
 
   const logout = () => {
-    // Log logout activity (for all users) - ONLY HERE during actual logout
+    // Log logout activity
     if (currentUser) {
       logUserActivity(currentUser.username, 'logout');
     }
@@ -347,6 +458,7 @@ const App = () => {
     setCurrentUser(null);
     setUserType(null);
     setTabs([]);
+    setFirstLoginTime(null);
     localStorage.clear();
     
     // Clear auto logout timer
@@ -389,6 +501,7 @@ const App = () => {
         showNotification,
         tabs,
         requestAccess,
+        grantAccess,
       }}
     >
       <Router>
@@ -478,6 +591,14 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <Attendance />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/attendance-history"
+                    element={
+                      <ProtectedRoute>
+                        <AttendanceHistoryPage />
                       </ProtectedRoute>
                     }
                   />
