@@ -34,7 +34,7 @@ function Dashboard() {
   const [dialogData, setDialogData] = useState([]);
   const [dialogHeaders, setDialogHeaders] = useState([]);
 
-  // Updated column mapping for Supabase FMS table - using actual column names
+  // FMS columns configuration
   const FMS_COLUMNS_INFO = {
     timestamp: { label: "Timestamp", property: "timestamp", type: "datetime" },
     dealer_code: { label: "Dealer Code", property: "dealer_code", type: "text" },
@@ -89,7 +89,6 @@ function Dashboard() {
       if (isNaN(date.getTime())) {
         return dateValue;
       }
-
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear();
@@ -100,13 +99,14 @@ function Dashboard() {
     }
   };
 
+  // FIXED: Fetch data from Supabase with proper timestamp handling
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
 
       if (!isAuthenticated || !currentUser) {
-        console.log("DEBUG: Not authenticated or currentUser missing. Skipping data fetch for Dashboard.");
+        console.log("DEBUG: Not authenticated or currentUser missing.");
         setIsLoading(false);
         setError("Please log in to view the dashboard.");
         return;
@@ -115,13 +115,11 @@ function Dashboard() {
       try {
         console.log("🔄 Fetching data from Supabase FMS table...");
 
-        // Build query based on user role
         let query = supabase
           .from('FMS')
           .select('*')
           .order('timestamp', { ascending: false });
 
-        // If user is not admin, only show their records
         if (userRole.toLowerCase() !== 'admin') {
           query = query.eq('sales_person_name', currentUserSalesPersonName);
         }
@@ -136,13 +134,12 @@ function Dashboard() {
 
         if (data && data.length > 0) {
           const allRows = data.map((row, rowIndex) => {
-            // Use direct Supabase column names without mapping
             const rowData = { 
               _rowIndex: rowIndex,
               id: row.id,
-              // Use actual Supabase column names
               timestamp: row.timestamp,
-              dealer_code: row.dealer_code || row.reg_xyy || row.dc_dealer_code,
+              timestamp_raw: row.timestamp, // FIXED: Store raw timestamp for filtering
+              dealer_code: row.dealer_code || row.reg_xyy || row.dc_dealer_code || null,
               dealer_name: row.dealer_name,
               dealer_region: row.dealer_region || row.district_name,
               sales_person_name: row.sales_person_name,
@@ -151,7 +148,7 @@ function Dashboard() {
               address: row.address,
               last_date_of_call: row.last_date_of_call,
               status: row.status,
-              stage:row.stage,
+              stage: row.stage,
               what_did_the_customer_say: row.what_did_the_customer_say || row.what_did_live_costs,
               next_date_of_call: row.next_date_of_call,
               next_action: row.next_action || row.next_sector,
@@ -161,15 +158,18 @@ function Dashboard() {
               value_of_order: row.value_of_order,
               last_order_before: row.last_order_before,
               area_name: row.area_name,
-              // Add the new columns
               select_value: row.select_value,
               planned: row.planned,
               actual: row.actual,
             };
 
-            // Apply formatting for date fields
+            // FIXED: Format date fields but keep timestamp raw
             Object.keys(FMS_COLUMNS_INFO).forEach(key => {
               const columnInfo = FMS_COLUMNS_INFO[key];
+              // Skip timestamp - we need it raw for filtering
+              if (columnInfo.property === 'timestamp') {
+                return;
+              }
               if ((columnInfo.type === 'date' || columnInfo.type === 'datetime') && rowData[columnInfo.property]) {
                 rowData[columnInfo.property] = formatDate(rowData[columnInfo.property]);
               }
@@ -190,7 +190,6 @@ function Dashboard() {
           setUniqueSalespersons([...Array.from(salespersons).sort()]);
 
         } else {
-          // No data found - set all counts to 0 and show empty state
           console.log("No data found in FMS table for user:", currentUserSalesPersonName);
           setAllFMSData([]);
           setUniqueSalespersons([]);
@@ -203,7 +202,6 @@ function Dashboard() {
       } catch (error) {
         console.error("DEBUG: Error fetching data:", error);
         setError(`Failed to load data: ${error.message}`);
-        // Reset all counts to 0 on error
         setTotalCount(0);
         setActiveDealersCount(0);
         setTotalOrdersCount(0);
@@ -216,6 +214,7 @@ function Dashboard() {
     fetchData();
   }, [isAuthenticated, currentUser, currentUserSalesPersonName, userRole]);
 
+  // FIXED: Enhanced filtering with proper Supabase timestamp handling
   const currentFilteredData = useMemo(() => {
     if (allFMSData.length === 0 || !isAuthenticated || !currentUser) {
       return [];
@@ -223,6 +222,7 @@ function Dashboard() {
 
     let tempFilteredData = [...allFMSData];
 
+    // First filter by salesperson
     tempFilteredData = tempFilteredData.filter((row) => {
       const rowSalespersonName = row.sales_person_name;
       const currentUserNameNormalized = currentUserSalesPersonName ? currentUserSalesPersonName.trim().toLowerCase() : '';
@@ -238,36 +238,85 @@ function Dashboard() {
       }
     });
 
+    // FIXED: Filter by date range using raw timestamp with proper Supabase format handling
     if (startDate && endDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
+      console.log("🕐 Date filtering - Start:", start.toISOString(), "End:", end.toISOString());
+
       tempFilteredData = tempFilteredData.filter((row) => {
-        if (!row.timestamp) return false;
+        const timestampToUse = row.timestamp_raw || row.timestamp;
+        
+        if (!timestampToUse) {
+          console.log("❌ No timestamp for row:", row.dealer_code, row.dealer_name);
+          return false;
+        }
         
         try {
-          const date = new Date(row.timestamp);
-          return !isNaN(date.getTime()) && date >= start && date <= end;
+          let rowDate;
+          
+          // FIXED: Handle Supabase timestamp format: "2025-10-31 17:53:14+00"
+          if (typeof timestampToUse === 'string') {
+            let isoTimestamp = timestampToUse.trim();
+            
+            // Replace space with 'T' for ISO format
+            if (isoTimestamp.includes(' ')) {
+              isoTimestamp = isoTimestamp.replace(' ', 'T');
+            }
+            
+            // Fix timezone format: "+00" -> "+00:00"
+            if (isoTimestamp.match(/[+-]\d{2}$/)) {
+              isoTimestamp = isoTimestamp + ':00';
+            }
+            
+            rowDate = new Date(isoTimestamp);
+          } else {
+            rowDate = new Date(timestampToUse);
+          }
+          
+          if (isNaN(rowDate.getTime())) {
+            console.log("❌ Invalid timestamp:", timestampToUse, "for row:", row.dealer_code);
+            return false;
+          }
+          
+          const isInRange = rowDate >= start && rowDate <= end;
+          
+          if (isInRange) {
+            console.log("✅ Date match:", row.dealer_code, row.dealer_name, "Date:", rowDate.toLocaleDateString());
+          }
+          
+          return isInRange;
         } catch (error) {
-          console.error('Date filtering error:', error, 'Date value:', row.timestamp);
+          console.error('Date filtering error:', error, 'Date value:', timestampToUse);
           return false;
         }
       });
+      
+      console.log("📊 Records after date filtering:", tempFilteredData.length);
     }
 
+    console.log("✅ Final filtered data count:", tempFilteredData.length);
+    
     return tempFilteredData;
   }, [allFMSData, startDate, endDate, isAdmin, currentUserSalesPersonName, selectedSalesperson, isAuthenticated, currentUser]);
 
   const filteredDataRef = useRef([]);
   useEffect(() => {
     filteredDataRef.current = currentFilteredData;
+    console.log("🔄 filteredDataRef updated with:", currentFilteredData.length, "records");
   }, [currentFilteredData]);
 
+  // FIXED: Enhanced active dealers counting
   useEffect(() => {
-    // Reset counts to 0 if no filtered data
+    console.log("🔄 Recalculating counts with filtered data");
+    console.log("📊 Current filtered data length:", currentFilteredData.length);
+    console.log("📊 Date filters:", { startDate, endDate });
+
     if (currentFilteredData.length === 0) {
+      console.log("❌ No filtered data, resetting all counts to 0");
       setTotalCount(0);
       setActiveDealersCount(0);
       setTotalOrdersCount(0);
@@ -277,53 +326,92 @@ function Dashboard() {
     
     setTotalCount(currentFilteredData.length);
     
-    // CORRECTED: Updated logic for active dealers count
     const activeDealers = new Set();
+    
+    console.log("🔍 Analyzing first 5 records for active dealer criteria:");
+    currentFilteredData.slice(0, 5).forEach((row, index) => {
+      console.log(`Record ${index + 1}:`, {
+        dealer_code: row.dealer_code,
+        dealer_name: row.dealer_name,
+        stage: row.stage,
+        select_value: row.select_value,
+        status: row.status,
+        timestamp: row.timestamp_raw
+      });
+    });
 
-    currentFilteredData.forEach(row => {
+    currentFilteredData.forEach((row) => {
       const dealerCode = row.dealer_code;
       const selectValue = row.select_value;
-      const status = row.stage; // CORRECTED: Using 'status' field instead of 'stage'
+      const stage = row.stage;
+      const status = row.status;
       
-      console.log("DEBUG - Row data:", { 
-        dealerCode, 
-        selectValue, 
-        status
-      });
+      if (!dealerCode || dealerCode.trim() === "") {
+        return;
+      }
       
-      // Check if this row meets the criteria for active dealer
-      if (dealerCode && 
-          status === "Order Received" && 
-          selectValue === "Dealer") {
+      const normalizedStage = stage ? String(stage).trim().toLowerCase() : '';
+      const normalizedStatus = status ? String(status).trim().toLowerCase() : '';
+      const normalizedSelectValue = selectValue ? String(selectValue).trim().toLowerCase() : '';
+      
+      const hasOrderReceived = 
+        normalizedStage === "order received" || 
+        normalizedStage.includes("order received") ||
+        normalizedStatus === "order received" ||
+        normalizedStatus.includes("order received");
+      
+      const isDealerType = 
+        normalizedSelectValue === "dealer" || 
+        normalizedSelectValue.includes("dealer");
+
+      if (hasOrderReceived && isDealerType) {
         activeDealers.add(dealerCode);
-        console.log("✅ Added active dealer:", dealerCode);
+        console.log("✅ ADDED Active dealer:", {
+          dealerCode,
+          dealerName: row.dealer_name,
+          stage: stage,
+          status: status,
+          selectValue: selectValue
+        });
       }
     });
 
-    console.log("DEBUG - Final active dealers:", Array.from(activeDealers));
-    setActiveDealersCount(activeDealers.size);
+    const activeDealersCount = activeDealers.size;
+    console.log("🎯 Final active dealers count:", activeDealersCount);
+    console.log("🎯 Active dealer codes:", Array.from(activeDealers));
+    setActiveDealersCount(activeDealersCount);
     
-    const ordersCount = currentFilteredData.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "").length;
+    const ordersCount = currentFilteredData.filter(row => {
+      const hasOrder = row.value_of_order && String(row.value_of_order).trim() !== "";
+      return hasOrder;
+    }).length;
     setTotalOrdersCount(ordersCount);
 
     const pendingCount = currentFilteredData.filter(row => {
       const planned = row.planned;
       const actual = row.actual;
-      
-      return planned !== null && 
+      const isPending = planned !== null && 
              planned !== undefined && 
              planned !== "" && 
              (actual === null || actual === undefined || actual === "");
+      return isPending;
     }).length;
 
     setPendingEnquiriesCount(pendingCount);
-  }, [currentFilteredData]);
 
+    console.log("📈 Final counts:", {
+      total: currentFilteredData.length,
+      activeDealers: activeDealersCount,
+      totalOrders: ordersCount,
+      pendingEnquiries: pendingCount
+    });
+  }, [currentFilteredData, startDate, endDate]);
+
+  // FIXED: handleCardClick for Active Dealers
   const handleCardClick = (kpiType) => {
     let dataForDialog = [];
     let title = "";
     
-    // Create headers for dialog based on display columns
     const headers = FMS_DISPLAY_COLUMNS_FOR_DIALOG.map(columnKey => 
       FMS_COLUMNS_INFO[columnKey]
     ).filter(Boolean);
@@ -336,20 +424,39 @@ function Dashboard() {
     } else if (kpiType === "activeDealers") {
       title = "Active Dealers";
       const uniqueDealerCodes = new Set();
+      
       dataForDialog = dataToFilter.filter(row => {
         const dealerCode = row.dealer_code;
         const selectValue = row.select_value;
-        const status = row.status; // CORRECTED: Using 'status' field instead of 'stage'
+        const stage = row.stage;
+        const status = row.status;
         
-        if (dealerCode && 
-            !uniqueDealerCodes.has(dealerCode) &&
-            status === "Order Received" && 
-            selectValue === "Dealer") {
+        if (!dealerCode || dealerCode.trim() === "") {
+          return false;
+        }
+        
+        const normalizedStage = stage ? String(stage).trim().toLowerCase() : '';
+        const normalizedStatus = status ? String(status).trim().toLowerCase() : '';
+        const normalizedSelectValue = selectValue ? String(selectValue).trim().toLowerCase() : '';
+        
+        const hasOrderReceived = 
+          normalizedStage === "order received" || 
+          normalizedStage.includes("order received") ||
+          normalizedStatus === "order received" ||
+          normalizedStatus.includes("order received");
+        
+        const isDealerType = 
+          normalizedSelectValue === "dealer" || 
+          normalizedSelectValue.includes("dealer");
+
+        if (hasOrderReceived && isDealerType && !uniqueDealerCodes.has(dealerCode)) {
           uniqueDealerCodes.add(dealerCode);
           return true;
         }
         return false;
       });
+      
+      console.log("📋 Active dealers dialog data count:", dataForDialog.length);
     } else if (kpiType === "totalOrders") {
       title = "Total Orders";
       dataForDialog = dataToFilter.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "");
@@ -358,7 +465,6 @@ function Dashboard() {
       dataForDialog = dataToFilter.filter(row => {
         const planned = row.planned;
         const actual = row.actual;
-        
         return planned !== null && 
                planned !== undefined && 
                planned !== "" && 
@@ -373,16 +479,11 @@ function Dashboard() {
   };
 
   const getGreeting = () => {
-  const currentHour = new Date().getHours();
-  
-  if (currentHour >= 5 && currentHour < 12) {
-    return "Good morning";
-  } else if (currentHour >= 12 && currentHour < 17) {
-    return "Good afternoon";
-  } else {
+    const currentHour = new Date().getHours();
+    if (currentHour >= 5 && currentHour < 12) return "Good morning";
+    if (currentHour >= 12 && currentHour < 17) return "Good afternoon";
     return "Good evening";
-  }
-};
+  };
 
   if (isLoading) {
     return (
@@ -395,7 +496,6 @@ function Dashboard() {
     );
   }
 
-  // Show dashboard with all zeros when no data is found
   if (error && allFMSData.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-3 sm:p-6">
@@ -405,127 +505,19 @@ function Dashboard() {
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
                 Dashboard
               </h1>
-         <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
-  {getGreeting()}, {currentUserSalesPersonName}!
-</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-md sm:shadow-lg border border-white/20 w-full sm:w-auto">
-              <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
-                <span className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">
-                  Today:
-                </span>
-                <span className="font-medium text-xs sm:text-sm md:text-base">
-                  {new Date().toLocaleDateString("en-GB")}
-                </span>
-              </div>
-              <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
-                <label htmlFor="startDate" className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">From:</label>
-                <input type="date" id="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="p-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
-                <label htmlFor="endDate" className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">To:</label>
-                <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="p-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              {isAdmin && (
-                <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
-                  <label htmlFor="salespersonFilter" className="font-semibold text-blue-600 text-xs sm:text-sm md:text-base">Salesperson:</label>
-                  <select id="salespersonFilter" value={selectedSalesperson} onChange={(e) => setSelectedSalesperson(e.target.value)} className="p-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">All Salespersons</option>
-                    {uniqueSalespersons.map((name) => (<option key={name} value={name}>{name}</option>))}
-                  </select>
-                </div>
-              )}
+              <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
+                {getGreeting()}, {currentUserSalesPersonName}!
+              </p>
             </div>
           </div>
-
-          {/* Show dashboard with all zeros */}
-          <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Total Records Card - 0 */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
-              <div className="h-full bg-gradient-to-br from-blue-400 via-blue-500 to-indigo-500 p-3 sm:p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-blue-100 uppercase tracking-wider mb-1">Total Records</h3>
-                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
-                      0
-                    </div>
-                  </div>
-                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                    <Users className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Active Dealers Card - 0 */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
-              <div className="h-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-3 sm:p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-purple-100 uppercase tracking-wider mb-1">Active Dealers</h3>
-                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
-                      0
-                    </div>
-                  </div>
-                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                    <Store className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Total Orders Card - 0 */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
-              <div className="h-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-3 sm:p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-pink-100 uppercase tracking-wider mb-1">Total Orders</h3>
-                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
-                      0
-                    </div>
-                  </div>
-                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                    <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Pending Enquiries Card - 0 */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden">
-              <div className="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-3 sm:p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-amber-100 uppercase tracking-wider mb-1">Pending Enquiries</h3>
-                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
-                      0
-                    </div>
-                  </div>
-                  <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                    <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Empty charts section */}
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 p-4 sm:p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Monthly Sales</h3>
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                No data available
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 p-4 sm:p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Order Status</h3>
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                No data available
-              </div>
-            </div>
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <p className="text-gray-600">{error}</p>
           </div>
         </div>
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-3 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
