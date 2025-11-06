@@ -364,7 +364,7 @@ function Dashboard() {
         normalizedSelectValue === "dealer" || 
         normalizedSelectValue.includes("dealer");
 
-      if (hasOrderReceived && isDealerType) {
+      if (hasOrderReceived ) {
         activeDealers.add(dealerCode);
         console.log("✅ ADDED Active dealer:", {
           dealerCode,
@@ -449,7 +449,7 @@ function Dashboard() {
           normalizedSelectValue === "dealer" || 
           normalizedSelectValue.includes("dealer");
 
-        if (hasOrderReceived && isDealerType && !uniqueDealerCodes.has(dealerCode)) {
+        if (hasOrderReceived  && !uniqueDealerCodes.has(dealerCode)) {
           uniqueDealerCodes.add(dealerCode);
           return true;
         }
