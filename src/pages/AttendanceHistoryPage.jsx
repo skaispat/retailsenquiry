@@ -62,22 +62,37 @@ const AttendanceHistoryPage = () => {
     }
   };
 
-  const filterData = () => {
-    let filtered = attendanceData;
+const filterData = () => {
+  let filtered = attendanceData;
 
-    if (selectedUser) {
-      filtered = filtered.filter(item => item.sales_person_name === selectedUser);
-    }
+  if (selectedUser) {
+    filtered = filtered.filter(item => item.sales_person_name === selectedUser);
+  }
 
-    if (selectedDate) {
-      filtered = filtered.filter(item => {
-        const recordDate = new Date(item.date_and_time).toISOString().split('T')[0];
-        return recordDate === selectedDate;
-      });
-    }
+  if (selectedDate) {
+    filtered = filtered.filter(item => {
+      if (!item.date_and_time) return false;
+      
+      try {
+        // Create date objects and compare only the date parts
+        const recordDate = new Date(item.date_and_time);
+        const filterDate = new Date(selectedDate);
+        
+        // Compare year, month, and day only
+        return (
+          recordDate.getFullYear() === filterDate.getFullYear() &&
+          recordDate.getMonth() === filterDate.getMonth() &&
+          recordDate.getDate() === filterDate.getDate()
+        );
+      } catch (error) {
+        console.error('Error filtering by date:', error);
+        return false;
+      }
+    });
+  }
 
-    setFilteredData(filtered);
-  };
+  setFilteredData(filtered);
+};
 
   const clearFilters = () => {
     setSelectedUser('');
@@ -273,18 +288,28 @@ const exportToPDF = () => {
     }
   };
 
-  const formatDateTime = (timestamp) => {
-    if (!timestamp) return '-';
+const formatDateTime = (timestamp) => {
+  if (!timestamp) return '-';
+  
+  try {
     const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
+    
+    // Use local timezone for display
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '-';
+  }
+};
+
 
   const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
@@ -432,7 +457,7 @@ const exportToPDF = () => {
 
           {/* Desktop Table View */}
           <div className="hidden lg:block overflow-x-auto">
-            <div className="max-h-96 overflow-y-auto">
+            <div className="max-h-150 overflow-y-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>

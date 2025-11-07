@@ -41,6 +41,7 @@ const DailyReport = () => {
   const COLUMN_MAPPINGS = {
     "Timestamp": "created_at",
     "Dealer Name": "deler_distributer_site_name",
+    "Area Name":"area_name",
     "Sales Person Name": "sales_person_name",
     "Remark": "what_did_customer_says",
     "Next Action": "next_action",
@@ -52,20 +53,22 @@ const DailyReport = () => {
   };
 
   // Select which columns to display in the table
-  const DISPLAY_HEADERS = [
-    { id: 'created_at', label: 'Timestamp' },
-    { id: 'deler_distributer_site_name', label: 'Dealer Name' },
-    { id: 'sales_person_name', label: 'Sales Person' },
-    { id: 'what_did_customer_says', label: 'Remark' },
-    { id: 'next_action', label: 'Next Action' },
-  ];
+const DISPLAY_HEADERS = [
+  { id: 'created_at', label: 'Timestamp' },
+  { id: 'deler_distributer_site_name', label: 'Dealer Name' },
+  { id: 'area_name', label: 'Area Name' }, // Add this line
+  { id: 'sales_person_name', label: 'Sales Person' },
+  { id: 'what_did_customer_says', label: 'Remark' },
+  { id: 'next_action', label: 'Next Action' },
+];
 
-  // Mobile display headers (shorter)
-  const MOBILE_HEADERS = [
-    { id: 'created_at', label: 'Time' },
-    { id: 'deler_distributer_site_name', label: 'Dealer' },
-    { id: 'what_did_customer_says', label: 'Remark' },
-  ];
+ // Mobile display headers (shorter)
+const MOBILE_HEADERS = [
+  { id: 'created_at', label: 'Time' },
+  { id: 'deler_distributer_site_name', label: 'Dealer' },
+  { id: 'area_name', label: 'Area' }, // Add this line
+  { id: 'what_did_customer_says', label: 'Remark' },
+];
 
   // Format date with time
   const formatDate = (dateValue) => {
@@ -270,7 +273,7 @@ const DailyReport = () => {
 
       // Manual table creation
       let yPos = 55;
-      const colWidths = [45, 60, 35, 90, 40];
+const colWidths = [45, 60, 35, 35, 90, 40]; 
       let xPos = 20;
 
       // Header row
