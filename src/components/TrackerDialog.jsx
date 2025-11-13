@@ -409,7 +409,7 @@ export default function TrackerDialog({
           : formData.valueOfOrder || null,
         last_date_of_call: new Date(),
         next_date_of_call: nextDateOfCall || null,
-        actual: formData.stage === "Not Interested" || formData.stage === "Order Closed"
+        actual: formData.stage === "Order Closed"
           ? new Date()
           : null,
         area_name: areaName || null, // Add area_name to FMS update
