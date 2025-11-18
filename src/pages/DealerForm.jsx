@@ -660,9 +660,9 @@ function DealerForm() {
     if (!formData.dealerName.trim() || formData.dealerName.length < 2) {
       newErrors.dealerName = "Dealer name must be at least 2 characters";
     }
-    if (!formData.contactNumber.trim() || formData.contactNumber.length < 10) {
-      newErrors.contactNumber = "Contact number must be at least 10 digits";
-    }
+    // if (!formData.contactNumber.trim() || formData.contactNumber.length < 10) {
+    //   newErrors.contactNumber = "Contact number must be at least 10 digits";
+    // }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -671,101 +671,146 @@ function DealerForm() {
   /**
    * Handles the form submission.
    */
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) {
-      showToast("❌ Please correct the errors in the form.", "error");
-      return;
+/**
+ * Handles the form submission.
+ */
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!validateForm()) {
+    showToast("❌ Please correct the errors in the form.", "error");
+    return;
+  }
+
+  setIsSubmitting(true);
+  try {
+    const date = new Date().toISOString();
+
+    const formattedDob = formData.dob
+      ? new Date(formData.dob).toISOString()
+      : null;
+    const formattedAnniversary = formData.anniversary
+      ? new Date(formData.anniversary).toISOString()
+      : null;
+
+    // Upload photo and get URL (for Site/Engineer only)
+    let photoUrl = null;
+    let locationData = null;
+
+    if (formData.photo && entityType === "Site/Engineer") {
+      // For Site/Engineer: Use the location already captured during photo processing
+      photoUrl = await uploadPhotoToSupabase(formData.photo);
+      console.log("Photo uploaded successfully:", photoUrl);
+      
+      // Use the location that was already captured with the photo
+      // BUT we need to ensure it's available and fresh
+      if (photoLocation) {
+        locationData = photoLocation;
+        console.log("Using photo location for Site/Engineer:", locationData);
+      } else {
+        // If photoLocation is not available, capture location now
+        console.warn("Photo location not found, capturing fresh location...");
+        try {
+          locationData = await getCurrentLocation();
+          console.log("Fresh location captured for Site/Engineer:", locationData);
+        } catch (locationError) {
+          console.warn("Could not capture location for Site/Engineer:", locationError);
+        }
+      }
+    } else {
+      // For Dealer/Distributor: Capture location now
+      try {
+        console.log("Capturing location for", entityType, "...");
+        locationData = await getCurrentLocation();
+        console.log("Location captured for", entityType + ":", locationData);
+      } catch (locationError) {
+        console.warn("Could not capture location for", entityType + ":", locationError);
+      }
     }
 
-    setIsSubmitting(true);
-    try {
-      const date = new Date().toISOString();
+    // Supabase insert data object - includes longitude and latitude for ALL entities
+    const insertData = {
+      state_name: formData.stateName,
+      district_name: formData.districtName,
+      area_name: formData.areaName,
+      sales_person_name: formData.salesPersonName,
+      dealer_name: formData.dealerName,
+      about_dealer: formData.aboutDealer,
+      address: formData.address,
+      contact_number: formData.contactNumber,
+      email_address: formData.emailAddress,
+      planned: date,
+      image_url: photoUrl || null,
+      dealer_size: formData.dealerSize || formData.siteNature, 
+      avg_qty: formData.avgQty,
+      select_value: entityType,
+      // Add longitude and latitude to the database for ALL entities
+      ...(locationData && {
+        longitude: locationData.longitude,
+        latitude: locationData.latitude,
+       
+      }),
+      ...(entityType !== "Site/Engineer" && {
+        date_of_birth: formattedDob,
+        anniversary: formattedAnniversary,
+      }),
+    };
 
-      const formattedDob = formData.dob
-        ? new Date(formData.dob).toISOString()
-        : null;
-      const formattedAnniversary = formData.anniversary
-        ? new Date(formData.anniversary).toISOString()
-        : null;
+    console.log("Submitting data to Supabase for", entityType + ":", {
+      ...insertData,
+      hasLocation: !!locationData,
+      coordinates: locationData ? `${locationData.latitude}, ${locationData.longitude}` : 'None'
+    });
+    
+    // Supabase insert call
+    const { data, error } = await supabase
+      .from('FMS')
+      .insert([insertData])
+      .select();
 
-      // Upload photo and get URL (for Site/Engineer only)
-      let photoUrl = null;
-
-      if (formData.photo && entityType === "Site/Engineer") {
-        photoUrl = await uploadPhotoToSupabase(formData.photo);
-        console.log("Photo uploaded successfully:", photoUrl);
-      }
-
-      // Supabase insert data object
-      const insertData = {
-        state_name: formData.stateName,
-        district_name: formData.districtName,
-        area_name: formData.areaName,
-        sales_person_name: formData.salesPersonName,
-        dealer_name: formData.dealerName,
-        about_dealer: formData.aboutDealer,
-        address: formData.address,
-        contact_number: formData.contactNumber,
-        email_address: formData.emailAddress,
-        planned: date,
-        image_url: photoUrl || null,
-        dealer_size: formData.dealerSize || formData.siteNature, 
-        avg_qty: formData.avgQty,
-        select_value: entityType,
-        ...(entityType !== "Site/Engineer" && {
-          date_of_birth: formattedDob,
-          anniversary: formattedAnniversary,
-        }),
-      };
-
-      console.log("Submitting data to Supabase:", insertData);
-      
-      // Supabase insert call
-      const { data, error } = await supabase
-        .from('FMS')
-        .insert([insertData])
-        .select();
-
-      if (error) {
-        throw error;
-      }
-
-      showToast(`✅ ${entityType} registered successfully!`);
-
-      // Reset form data after successful submission
-      setFormData({
-        stateName: "",
-        districtName: "",
-        areaName: "",
-        salesPersonName:
-          userRole === "User" && currentUser?.salesPersonName
-            ? currentUser.salesPersonName
-            : "",
-        dealerName: "",
-        aboutDealer: "",
-        address: "",
-        dealerSize: "",
-        avgQty: "",
-        contactNumber: "",
-        emailAddress: "",
-        dob: "",
-        anniversary: "",
-        siteNature: "",
-        photo: null,
-      });
-      
-      // Reset photo data and clear file input
-      resetPhotoData();
-      setErrors({});
-      
-    } catch (error) {
-      console.error("Submission error:", error);
-      showToast(`❌ Error submitting form: ${error.message}`, "error");
-    } finally {
-      setIsSubmitting(false);
+    if (error) {
+      throw error;
     }
-  };
+
+    // Show success message with location status
+    const successMessage = locationData 
+      ? `✅ ${entityType} registered successfully with location!` 
+      : `✅ ${entityType} registered successfully! (Location unavailable)`;
+    
+    showToast(successMessage);
+
+    // Reset form data after successful submission
+    setFormData({
+      stateName: "",
+      districtName: "",
+      areaName: "",
+      salesPersonName:
+        userRole === "User" && currentUser?.salesPersonName
+          ? currentUser.salesPersonName
+          : "",
+      dealerName: "",
+      aboutDealer: "",
+      address: "",
+      dealerSize: "",
+      avgQty: "",
+      contactNumber: "",
+      emailAddress: "",
+      dob: "",
+      anniversary: "",
+      siteNature: "",
+      photo: null,
+    });
+    
+    // Reset photo data and clear file input
+    resetPhotoData();
+    setErrors({});
+    
+  } catch (error) {
+    console.error("Submission error:", error);
+    showToast(`❌ Error submitting form: ${error.message}`, "error");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // Helper function to check if entity type is Site/Engineer
   const isSiteEngineer = entityType === "Site/Engineer";

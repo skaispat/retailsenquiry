@@ -27,6 +27,17 @@ export default function TrackerDialog({
   const [modalType, setModalType] = useState("success");
   const [modalMessage, setModalMessage] = useState("");
 
+  // State for sales person names from master table
+  const [salesPersonNames, setSalesPersonNames] = useState([]);
+
+  // State for location coordinates
+  const [location, setLocation] = useState({
+    latitude: null,
+    longitude: null,
+    error: null,
+    isLoading: false
+  });
+
   const [formData, setFormData] = useState({
     orderQty: "",
     orderedProducts: "",
@@ -34,9 +45,9 @@ export default function TrackerDialog({
     status: "",
     stage: "",
     nextAction: "",
-    nextCallDate: "",
     valueOfOrder: "",
-    subStage: "" // Added subStage for Site/Engineer
+    subStage: "",
+    salesPersonName: ""
   });
 
   const [showNotInterestedSection, setShowNotInterestedSection] = useState(false);
@@ -51,6 +62,9 @@ export default function TrackerDialog({
 
   // Get entity type from Supabase data
   const entityType = dealerData?.supabase_data?.select_value || "";
+
+  // Check if current user is admin
+  const isAdmin = currentUser?.role?.toLowerCase() === "admin";
 
   // Define statuses and stages from masterData
   const statuses = masterData
@@ -79,6 +93,127 @@ export default function TrackerDialog({
       ]
     : [];
 
+  // Fetch current location when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      getCurrentLocation();
+    } else {
+      // Reset location when dialog closes
+      setLocation({
+        latitude: null,
+        longitude: null,
+        error: null,
+        isLoading: false
+      });
+    }
+  }, [isOpen]);
+
+  // Function to get current location
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocation(prev => ({
+        ...prev,
+        error: "Geolocation is not supported by this browser.",
+        isLoading: false
+      }));
+      return;
+    }
+
+    setLocation(prev => ({ ...prev, isLoading: true, error: null }));
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          error: null,
+          isLoading: false
+        });
+        console.log("📍 Location captured:", {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        });
+      },
+      (error) => {
+        let errorMessage = "Unable to retrieve your location.";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location access denied by user.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information unavailable.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out.";
+            break;
+          default:
+            errorMessage = "An unknown error occurred.";
+            break;
+        }
+        
+        setLocation({
+          latitude: null,
+          longitude: null,
+          error: errorMessage,
+          isLoading: false
+        });
+        console.error("❌ Location error:", errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
+  // Fetch sales person names from master table
+  useEffect(() => {
+    const fetchSalesPersonNames = async () => {
+      if (!isOpen) return;
+      
+      try {
+        console.log("🔄 Fetching sales person names from master table...");
+        
+        const { data, error } = await supabase
+          .from('master')
+          .select('sales_person_name')
+          .not('sales_person_name', 'is', null)
+          .not('sales_person_name', 'eq', '')
+          .order('sales_person_name');
+
+        if (error) {
+          console.error('Error fetching sales person names:', error);
+          throw error;
+        }
+
+        console.log("✅ Sales person names fetched:", data);
+
+        // Extract unique names and filter out invalid values
+        const uniqueNames = [...new Set(data
+          .map(item => item.sales_person_name)
+          .filter(name => 
+            name && 
+            name.trim() !== "" &&
+            !['Sales Person', 'sales person', 'SALES PERSON', 'Sales Person Name'].includes(name)
+          )
+        )];
+
+        console.log("✨ Unique sales person names:", uniqueNames);
+        setSalesPersonNames(uniqueNames);
+
+      } catch (error) {
+        console.error('Failed to fetch sales person names:', error);
+        setSalesPersonNames([]);
+      }
+    };
+
+    if (isOpen && isAdmin) {
+      fetchSalesPersonNames();
+    }
+  }, [isOpen, isAdmin]);
+
   /**
    * Get stage options based on entity type
    */
@@ -86,22 +221,16 @@ export default function TrackerDialog({
     if (entityType === "Site/Engineer") {
       return [
         "Follow-up",
-        "Call",
         "Call not picked",
         "Order Closed",
         "Order Pending",
-        //  "Site Visit", 
       ];
     } else {
-      // For Dealer and Distributor - original options
       return [
         "Follow-Up",
-        "Call",
         "Call Not Picked",
         "Introductory Call",
         "First Visit",
-        // "Site Visit",
-        // "Quotation Sent",
         "Order Received",
         "Order Not Received",
         "Not Interested",
@@ -221,30 +350,32 @@ export default function TrackerDialog({
       "Introductory Call",
       "Call",
       "First Visit",
-      "Follow-up", // For Site/Engineer
-      "Call not picked" // For Site/Engineer
+      "Follow-up",
+      "Call not picked"
     ].includes(formData.stage);
 
-    // Special handling for Site/Engineer Order Closed stage
     const isSiteEngineerOrderClosed = entityType === "Site/Engineer" && formData.stage === "Order Closed";
 
     setFieldVisibility({
       showCustomerFeedback: (isFollowUpCallStage || isOrderNotReceivedStage || isSiteEngineerOrderClosed) && 
                            !["Call Not Picked", "Call not picked"].includes(formData.stage),
       showNextAction: isFollowUpCallStage || isOrderNotReceivedStage,
-      showNextCallDate: isFollowUpCallStage || isOrderNotReceivedStage,
+      showNextCallDate: false,
       showOrderQty: isOrderStage,
       showOrderedProducts: isOrderStage,
       showValueOfOrder: (isOrderStage || isOrderNotReceivedStage) && 
                        formData.stage !== "Order Not Received" && 
                        formData.stage !== "Order Pending" &&
-                       !isSiteEngineerOrderClosed, // Remove value of order for Site/Engineer Order Closed
+                       !isSiteEngineerOrderClosed,
       requireStatus: true,
     });
   }, [formData.stage, entityType]);
 
   useEffect(() => {
     if (isOpen && dealerData) {
+      // Set default sales person name
+      const defaultSalesPersonName = isAdmin ? "" : (currentUser?.salesPersonName || "");
+      
       setFormData({
         orderQty: "",
         orderedProducts: "",
@@ -252,9 +383,9 @@ export default function TrackerDialog({
         status: dealerData.col9 || "",
         stage: dealerData.col10 || "",
         nextAction: "",
-        nextCallDate: "",
         valueOfOrder: "",
-        subStage: ""
+        subStage: "",
+        salesPersonName: defaultSalesPersonName
       });
     } else {
       setFormData({
@@ -264,9 +395,9 @@ export default function TrackerDialog({
         status: "",
         stage: "",
         nextAction: "",
-        nextCallDate: "",
         valueOfOrder: "",
-        subStage: ""
+        subStage: "",
+        salesPersonName: ""
       });
       setErrors({});
       setNotInterestedReason("");
@@ -276,7 +407,7 @@ export default function TrackerDialog({
       setShowNotInterestedSection(false);
       setShowPaymentCollectionSection(false);
     }
-  }, [isOpen, dealerData]);
+  }, [isOpen, dealerData, isAdmin, currentUser]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -308,19 +439,13 @@ export default function TrackerDialog({
       newErrors.stage = "Stage is required.";
     }
 
-    // For Site/Engineer Order stages, require sub-stage
-    // if (entityType === "Site/Engineer" && 
-    //     (formData.stage === "Order Closed" || formData.stage === "Order Pending") &&
-    //     !formData.subStage) {
-    //   newErrors.subStage = "Order status is required.";
-    // }
+    // Validate sales person name
+    if (!formData.salesPersonName) {
+      newErrors.salesPersonName = "Sales person name is required.";
+    }
 
     if (fieldVisibility.showNextAction && !formData.nextAction) {
       newErrors.nextAction = "Next action is required.";
-    }
-
-    if (fieldVisibility.showNextCallDate && !formData.nextCallDate) {
-      newErrors.nextCallDate = "Next call date is required.";
     }
 
     setErrors(newErrors);
@@ -335,20 +460,26 @@ export default function TrackerDialog({
       showToast("Please correct the errors in the form.", "error");
       return;
     }
+
+    // Check if location is available
+    if (!location.latitude || !location.longitude) {
+      showToast("Please enable location services to record interaction.", "error");
+      return;
+    }
+
     setErrors({});
     setIsSubmitting(true);
 
     try {
       const dealerCode = dealerData?.col1 || "";
       const dealerName = dealerData?.col5 || "";
-      const select_value=dealerData?.select_value||"";
-      const areaName = dealerData?.supabase_data?.area_name || ""; // Get area_name from Supabase data
+      const select_value = dealerData?.select_value || "";
+      const areaName = dealerData?.supabase_data?.area_name || "";
       
       if (!dealerCode) throw new Error("Dealer code is missing");
 
       const formattedTimestamp = new Date().toISOString();
       const formattedLastDateOfCall = dealerData.col17 || null;
-      const formattedNextCallDate = formData.nextCallDate || null;
 
       // Conditional logic for customer feedback
       const whatDidCustomerSay =
@@ -357,13 +488,13 @@ export default function TrackerDialog({
           : formData.stage === "Payment Enquiry" && paymentCollection === "No"
           ? whyNotCollection
           : (entityType === "Site/Engineer" && formData.stage === "Order Closed")
-          ? formData.customerFeedback // For Site/Engineer Order Closed, use customer feedback
+          ? formData.customerFeedback
           : formData.customerFeedback;
 
       const nextDateOfCall =
         formData.stage === "Payment Enquiry" && paymentCollection === "No"
           ? nextCollectionDate
-          : formattedNextCallDate;
+          : null;
 
       // Construct the Supabase insert object for tracking_history
       const insertData = {
@@ -377,16 +508,23 @@ export default function TrackerDialog({
         order_qty: formData.orderQty || null,
         order_products: formData.orderedProducts || null,
         value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed") 
-          ? null // Remove value of order for Site/Engineer Order Closed
+          ? null
           : formData.valueOfOrder || null,
-        sales_person_name: currentUser?.salesPersonName || "Unknown",
+        sales_person_name: formData.salesPersonName || currentUser?.salesPersonName || "Unknown",
         payment_yes_no: formData.stage === "Payment Enquiry" ? paymentCollection : null,
         deler_distributer_site_name: dealerName || null,
         area_name: areaName || null,
-        select_value: select_value, // Add area_name to tracking_history
+        select_value: select_value,
+        // Add longitude and latitude to the tracking_history table
+        longitude: location.longitude,
+        latitude: location.latitude,
       };
 
-      console.log("Inserting tracking data to Supabase:", insertData);
+      // console.log("📍 Inserting tracking data with location:", {
+      //   ...insertData,
+      //   latitude: location.latitude,
+      //   longitude: location.longitude
+      // });
 
       // Insert into tracking_history table
       const { data: trackingData, error: trackingError } = await supabase
@@ -405,28 +543,31 @@ export default function TrackerDialog({
         next_action: formData.nextAction || null,
         order_products: formData.orderedProducts || null,
         value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed") 
-          ? null // Remove value of order for Site/Engineer Order Closed
+          ? null
           : formData.valueOfOrder || null,
         last_date_of_call: new Date(),
         next_date_of_call: nextDateOfCall || null,
         actual: formData.stage === "Not Interested" || formData.stage === "Order Closed"
           ? new Date()
           : null,
-        area_name: areaName || null, // Add area_name to FMS update
+        area_name: areaName || null,
+        // Add location to FMS table if you have the columns there too
+        longitude: location.longitude,
+        latitude: location.latitude,
       };
 
-      console.log("Updating FMS table with data:", fmsUpdateData);
+      console.log("📍 Updating FMS table with location data:", fmsUpdateData);
 
       // Update FMS table using update instead of upsert
       const { data: fmsData, error: fmsError } = await supabase
-        .from("FMS") // Replace with your actual FMS table name
+        .from("FMS")
         .update(fmsUpdateData)
-        .eq('dc_dealer_code', dealerCode); // Update where dealer_code matches
+        .eq('dc_dealer_code', dealerCode);
 
       if (fmsError) throw fmsError;
 
       showToast(
-        `Tracking data for ${dealerCode} recorded successfully!`,
+        `Tracking data for ${dealerCode} recorded successfully with location!`,
         "success"
       );
 
@@ -485,6 +626,48 @@ export default function TrackerDialog({
                   </p>
                 </div>
               )}
+              
+              {/* Location Status */}
+              {/* <div className="mt-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    Location Status:
+                  </span>
+                  {location.isLoading ? (
+                    <span className="text-yellow-600 text-sm flex items-center gap-1">
+                      <div className="w-3 h-3 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
+                      Getting location...
+                    </span>
+                  ) : location.error ? (
+                    <span className="text-red-600 text-sm flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      {location.error}
+                    </span>
+                  ) : location.latitude && location.longitude ? (
+                    <span className="text-green-600 text-sm flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Location captured ({location.latitude.toFixed(6)}, {location.longitude.toFixed(6)})
+                    </span>
+                  ) : (
+                    <span className="text-gray-500 text-sm">Location not available</span>
+                  )}
+                </div>
+                {location.error && (
+                  <button
+                    onClick={getCurrentLocation}
+                    className="mt-1 text-blue-600 text-sm hover:text-blue-800 flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Retry location
+                  </button>
+                )}
+              </div> */}
             </div>
             <button
               onClick={onClose}
@@ -557,31 +740,41 @@ export default function TrackerDialog({
                 </div>
               </div>
 
-              {/* Sub-stage for Site/Engineer Order stages */}
-              {/* {subStageOptions.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Order Status *
-                  </label>
-                  <select
-                    name="subStage"
-                    value={formData.subStage || ""}
-                    onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-md"
-                    required
-                  >
-                    <option value="">Select Order Status</option>
-                    {subStageOptions.map((subStage) => (
-                      <option key={subStage} value={subStage}>
-                        {subStage}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.subStage && (
-                    <p className="text-red-500 text-sm mt-1">{errors.subStage}</p>
-                  )}
-                </div>
-              )} */}
+              {/* Sales Person Name Field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sales Person Name {isAdmin && <span className="text-red-500">*</span>}
+                </label>
+                {isAdmin ? (
+                  <>
+                    <select
+                      name="salesPersonName"
+                      value={formData.salesPersonName}
+                      onChange={handleInputChange}
+                      className="w-full p-3 border border-gray-300 rounded-md"
+                      required
+                    >
+                      <option value="">Select Sales Person</option>
+                      {salesPersonNames.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.salesPersonName && (
+                      <p className="text-red-500 text-sm mt-1">{errors.salesPersonName}</p>
+                    )}
+                  </>
+                ) : (
+                  <input
+                    type="text"
+                    value={currentUser?.salesPersonName || "Unknown User"}
+                    className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
+                    readOnly
+                    disabled
+                  />
+                )}
+              </div>
 
               {/* Not Interested Section */}
               {showNotInterestedSection && (
@@ -706,27 +899,6 @@ export default function TrackerDialog({
                 </div>
               )}
 
-              {fieldVisibility.showNextCallDate && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Next Call Date
-                  </label>
-                  <input
-                    type="date"
-                    name="nextCallDate"
-                    value={formData.nextCallDate}
-                    onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-md"
-                    required
-                  />
-                  {errors.nextCallDate && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.nextCallDate}
-                    </p>
-                  )}
-                </div>
-              )}
-
               {(fieldVisibility.showOrderQty ||
                 fieldVisibility.showOrderedProducts ||
                 fieldVisibility.showValueOfOrder) && (
@@ -789,8 +961,8 @@ export default function TrackerDialog({
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isSubmitting || !location.latitude || !location.longitude}
                 >
                   {isSubmitting ? "Recording..." : "Record Interaction"}
                 </button>
@@ -800,7 +972,7 @@ export default function TrackerDialog({
         </div>
       </div>
 
-      {/* Modal popup remains the same */}
+      {/* Modal popup */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">

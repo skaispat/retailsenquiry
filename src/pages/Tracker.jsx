@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useContext } from "react";
 import { toast, Toaster } from "react-hot-toast";
-import { DownloadIcon, RefreshCw, SearchIcon, Eye, ChevronDown, ChevronUp } from "lucide-react";
+import { DownloadIcon, RefreshCw, SearchIcon, Eye, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import TrackerDialog from "../components/TrackerDialog";
 import { AuthContext } from "../App";
 import supabase from "../SupaabseClient";
@@ -24,7 +24,7 @@ const Tracker = () => {
   const userRole = currentUser?.role || "User";
   const isAdmin = userRole.toLowerCase() === "admin";
 
-  // Base headers without the admin-only column
+  // Base headers without the admin-only columns
   const baseHeaders = [
     { id: "col5", label: "Dealer Name" },
     { id: "col3", label: "District Name" },
@@ -42,8 +42,11 @@ const Tracker = () => {
     { id: "col13", label: "Anniversary" },
   ];
 
-  // Admin-only header
-  const adminOnlyHeader = { id: "select_value", label: "Selected Type" };
+  // Admin-only headers
+  const adminOnlyHeaders = [
+    { id: "select_value", label: "Selected Type" },
+    { id: "location", label: "Location", isAction: true } // New location column
+  ];
 
   // Dynamic headers based on user role
   const [sheetHeaders, setSheetHeaders] = useState(baseHeaders);
@@ -79,6 +82,8 @@ const Tracker = () => {
         col17: item.last_call_date || "", // Last Call Date
         select_value: item.select_value || null,
         image_url: item.image_url || null,
+        longitude: item.longitude || null, // Add longitude
+        latitude: item.latitude || null,   // Add latitude
         supabase_data: item
       };
     });
@@ -89,7 +94,7 @@ const Tracker = () => {
    */
   useEffect(() => {
     if (isAdmin) {
-      setSheetHeaders([...baseHeaders, adminOnlyHeader]);
+      setSheetHeaders([...baseHeaders, ...adminOnlyHeaders]);
     } else {
       setSheetHeaders(baseHeaders);
     }
@@ -132,12 +137,9 @@ const Tracker = () => {
     try {
       console.log("🔄 Fetching master data from Supabase...");
       
-      // Assuming your table name is 'dropdown_master' or similar
-      // Adjust the table name according to your Supabase setup
       const { data, error } = await supabase
-        .from('dropdown') // Replace with your actual table name
+        .from('dropdown')
         .select('*');
-        
 
       if (error) {
         throw new Error(`Supabase error: ${error.message}`);
@@ -145,11 +147,9 @@ const Tracker = () => {
 
       console.log("✅ Master data fetched from Supabase:", data);
       
-      // Transform the data to match the expected format
       const transformedData = data.map(item => ({
-        col1: item.status || "", // Status column
-        col2: item.stage || "",  // Stage column
-        // Add other columns if needed
+        col1: item.status || "",
+        col2: item.stage || "",
       }));
 
       return transformedData;
@@ -169,11 +169,39 @@ const Tracker = () => {
         _rowIndex: rowIndex + 1,
       };
       
-      // Map the columns to maintain compatibility
-      if (row.col1) itemObj.col1 = row.col1; // Status
-      if (row.col2) itemObj.col2 = row.col2; // Stage
+      if (row.col1) itemObj.col1 = row.col1;
+      if (row.col2) itemObj.col2 = row.col2;
       
       return itemObj;
+    });
+  };
+
+  /**
+   * Open Google Maps directly with coordinates
+   */
+  const openInGoogleMaps = (item) => {
+    if (!item.latitude || !item.longitude) {
+      toast.error("Location data not available for this dealer", {
+        duration: 3000,
+        position: "top-right",
+      });
+      return;
+    }
+
+    const lat = item.latitude;
+    const lng = item.longitude;
+    const dealerName = item.col5 || "Dealer Location";
+    
+    // Create Google Maps URL
+    const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}&z=15`;
+    
+    // Open in new tab
+    window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+    
+    // Optional: Show success message
+    toast.success(`Opening ${dealerName} location in Google Maps`, {
+      duration: 2000,
+      position: "top-right",
     });
   };
 
@@ -191,20 +219,17 @@ const Tracker = () => {
         return;
       }
 
-      // Fetch data from both sources
       const [fmsData, masterData] = await Promise.all([
         fetchFMSDataFromSupabase(),
         fetchMasterDataFromSupabase(),
       ]);
 
-      // Process FMS data from Supabase
       const processedFMSData = mapSupabaseToLegacyFormat(fmsData);
       console.log("Processed FMS Data:", processedFMSData);
 
-      // Apply initial filters: Column O not empty AND Column P is empty
       let filteredFMSItems = processedFMSData.filter((item) => {
-        const colO = item.col14; // Planned column
-        const colP = item.col15; // Actual column
+        const colO = item.col14;
+        const colP = item.col15;
 
         const isColONotEmpty = colO && String(colO).trim() !== "";
         const isColPEmpty = !colP || String(colP).trim() === "";
@@ -223,7 +248,6 @@ const Tracker = () => {
         return hasContentInDisplayedColumns;
       });
 
-      // Apply role-based filtering
       if (!isAdmin) {
         filteredFMSItems = filteredFMSItems.filter((item) => {
           const salesPersonInRow = String(item.col4 || "").toLowerCase();
@@ -234,7 +258,6 @@ const Tracker = () => {
       console.log("Final Filtered FMS Items:", filteredFMSItems);
       setIndents(filteredFMSItems);
 
-      // Process master data
       const masterItems = processMasterRows(masterData);
       setMasterSheetData(masterItems);
 
@@ -303,6 +326,7 @@ const Tracker = () => {
     const col4Val = String(item.col4 || "").toLowerCase();
 
     const matchesSearchTerm = sheetHeaders.some((header) => {
+      if (header.id === "location") return false; // Skip location column in search
       const value = item[header.id];
       return value && String(value).toLowerCase().includes(term);
     });
@@ -329,6 +353,9 @@ const Tracker = () => {
         ...filteredIndents.map((item) => {
           const actionPlaceholder = "Update";
           const rowValues = sheetHeaders.map((header) => {
+            if (header.id === "location") {
+              return item.latitude && item.longitude ? `${item.latitude}, ${item.longitude}` : "No Location";
+            }
             let value = item[header.id] || "";
             if (header.id === "col12" || header.id === "col13" || header.id === "col17") {
               value = formatDateToDDMMYYYY(value);
@@ -430,63 +457,62 @@ const Tracker = () => {
   return (
     <>
       <Toaster position="top-right" />
+      
       <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-3 lg:p-8 overflow-hidden">
         <div className="max-w-7xl mx-auto h-full flex flex-col">
           {/* Main Card - Takes full height */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col flex-1">
             {/* Fixed Header Section */}
-          <div className="flex-shrink-0">
-  <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-2 sm:px-8 py-2 sm:py-6">
-    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-      {/* Title Section - Centered on all screens */}
-      <div className="text-center lg:text-left">
-        <h3 className="lg:text-2xl font-bold text-white mb-2 text-xl">
-          Dealer Tracking
-        </h3>
-        {/* Hidden on mobile, show on medium screens and up */}
-        <p className="text-green-50 text-lg hidden md:block">
-          Comprehensive view of all dealer interactions and follow-ups
-        </p>
-        {/* Hidden on mobile, show on medium screens and up */}
-        <p className="text-green-100 text-sm mt-2 hidden md:block">
-          Current User:{" "}
-          <span className="font-semibold">
-            {currentUserSalesPersonName}
-          </span>{" "}
-          (Role: <span className="font-semibold">{userRole}</span>)
-          {isAdmin && " - Admin View"}
-        </p>
-      </div>
-      
-      {/* Export Button - Right aligned */}
-      <div className="flex justify-center lg:justify-end">
-        <button
-          onClick={exportData}
-          className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
-        >
-          <DownloadIcon className="h-4 w-4" />
-          Export
-        </button>
-      </div>
-    </div>
-  </div>
-  
-  {/* Search Bar - Fixed */}
-  <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
-    <div className="flex items-center">
-      <div className="relative w-full max-w-md">
-        <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-        <input
-          type="search"
-          placeholder="Search dealers..."
-          className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-slate-700 font-medium"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-    </div>
-  </div>
-</div>
+            <div className="flex-shrink-0">
+              <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-2 sm:px-8 py-2 sm:py-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  {/* Title Section - Centered on all screens */}
+                  <div className="text-center lg:text-left">
+                    <h3 className="lg:text-2xl font-bold text-white mb-2 text-xl">
+                      Dealer Tracking
+                    </h3>
+                    <p className="text-green-50 text-lg hidden md:block">
+                      Comprehensive view of all dealer interactions and follow-ups
+                    </p>
+                    <p className="text-green-100 text-sm mt-2 hidden md:block">
+                      Current User:{" "}
+                      <span className="font-semibold">
+                        {currentUserSalesPersonName}
+                      </span>{" "}
+                      (Role: <span className="font-semibold">{userRole}</span>)
+                      {isAdmin && " - Admin View"}
+                    </p>
+                  </div>
+                  
+                  {/* Export Button - Right aligned */}
+                  <div className="flex justify-center lg:justify-end">
+                    <button
+                      onClick={exportData}
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
+                    >
+                      <DownloadIcon className="h-4 w-4" />
+                      Export
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Search Bar - Fixed */}
+              <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
+                <div className="flex items-center">
+                  <div className="relative w-full max-w-md">
+                    <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                    <input
+                      type="search"
+                      placeholder="Search dealers..."
+                      className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-slate-700 font-medium"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Scrollable Content Section - Takes remaining space */}
             <div className="flex-1 overflow-hidden">
@@ -518,7 +544,7 @@ const Tracker = () => {
                           </tr>
                         ) : (
                           filteredIndents.map((item) => (
-                            <tr key={item._id} className="hover:bg-slate-50 transition-colors duration-150 cursor-pointer">
+                            <tr key={item._id} className="hover:bg-slate-50 transition-colors duration-150">
                               <td className="px-6 py-4 text-left">
                                 <button
                                   className="bg-gradient-to-r from-green-100 to-teal-100 text-green-700 border border-green-200 hover:from-green-200 hover:to-teal-200 font-medium py-2 px-4 rounded-lg text-sm flex items-center gap-2 transition-all duration-200"
@@ -533,9 +559,25 @@ const Tracker = () => {
                               </td>
                               {sheetHeaders.map((header) => (
                                 <td key={header.id} className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">
-                                  {header.id === "col12" || header.id === "col13" || header.id === "col17"
-                                    ? formatDateToDDMMYYYY(item?.[header.id])
-                                    : item?.[header.id] || "—"}
+                                  {header.id === "location" ? (
+                                    <button
+                                      onClick={() => openInGoogleMaps(item)}
+                                      className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${
+                                        item.latitude && item.longitude 
+                                          ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 hover:shadow-sm" 
+                                          : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                                      }`}
+                                      disabled={!item.latitude || !item.longitude}
+                                      title={item.latitude && item.longitude ? "Open in Google Maps" : "Location not available"}
+                                    >
+                                      <MapPin className="h-4 w-4" />
+                                      {item.latitude && item.longitude && "View Map"}
+                                    </button>
+                                  ) : header.id === "col12" || header.id === "col13" || header.id === "col17" ? (
+                                    formatDateToDDMMYYYY(item?.[header.id])
+                                  ) : (
+                                    item?.[header.id] || "—"
+                                  )}
                                 </td>
                               ))}
                             </tr>
@@ -601,9 +643,24 @@ const Tracker = () => {
                                       {header.label}:
                                     </span>
                                     <span className="text-slate-900 font-semibold text-sm text-right break-words flex-1">
-                                      {header.id === "col12" || header.id === "col13" || header.id === "col17"
-                                        ? formatDateToDDMMYYYY(item?.[header.id])
-                                        : item?.[header.id] || "—"}
+                                      {header.id === "location" ? (
+                                        <button
+                                          onClick={() => openInGoogleMaps(item)}
+                                          className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${
+                                            item.latitude && item.longitude 
+                                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" 
+                                              : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                                          }`}
+                                          disabled={!item.latitude || !item.longitude}
+                                        >
+                                          <MapPin className="h-4 w-4" />
+                                          {item.latitude && item.longitude && "View Map"}
+                                        </button>
+                                      ) : header.id === "col12" || header.id === "col13" || header.id === "col17" ? (
+                                        formatDateToDDMMYYYY(item?.[header.id])
+                                      ) : (
+                                        item?.[header.id] || "—"
+                                      )}
                                     </span>
                                   </div>
                                 ))}

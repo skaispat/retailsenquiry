@@ -25,6 +25,9 @@ const DailyReport = () => {
   const userRole = currentUser?.role || "User";
   const currentUserSalesPersonName = currentUser?.salesPersonName || "Unknown User";
 
+  // Check if user is admin
+  const isAdmin = userRole.toLowerCase() === 'admin';
+
   // Check screen size
   useEffect(() => {
     const checkScreenSize = () => {
@@ -56,7 +59,7 @@ const DailyReport = () => {
 const DISPLAY_HEADERS = [
   { id: 'created_at', label: 'Timestamp' },
   { id: 'deler_distributer_site_name', label: 'Dealer Name' },
-  { id: 'area_name', label: 'Area Name' }, // Add this line
+  { id: 'area_name', label: 'Area Name' },
   { id: 'sales_person_name', label: 'Sales Person' },
   { id: 'what_did_customer_says', label: 'Remark' },
   { id: 'next_action', label: 'Next Action' },
@@ -66,7 +69,7 @@ const DISPLAY_HEADERS = [
 const MOBILE_HEADERS = [
   { id: 'created_at', label: 'Time' },
   { id: 'deler_distributer_site_name', label: 'Dealer' },
-  { id: 'area_name', label: 'Area' }, // Add this line
+  { id: 'area_name', label: 'Area' },
   { id: 'what_did_customer_says', label: 'Remark' },
 ];
 
@@ -100,11 +103,15 @@ const MOBILE_HEADERS = [
     return value || "—";
   };
 
-  // Set today's date as default filter
+  // Set today's date as default filter for admin, no filter for users
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    setDateFilter(today);
-  }, []);
+    if (isAdmin) {
+      const today = new Date().toISOString().split('T')[0];
+      setDateFilter(today);
+    } else {
+      setDateFilter(''); // No date filter for users
+    }
+  }, [isAdmin]);
 
   const fetchData = async () => {
     try {
@@ -125,9 +132,17 @@ const MOBILE_HEADERS = [
         .select('*')
         .order('created_at', { ascending: false });
 
-      // If user is not admin, only show their records
-      if (userRole.toLowerCase() !== 'admin') {
-        query = query.eq('sales_person_name', currentUserSalesPersonName);
+      // If user is not admin, only show their records and today's data
+      if (!isAdmin) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        query = query
+          .eq('sales_person_name', currentUserSalesPersonName)
+          .gte('created_at', today.toISOString())
+          .lt('created_at', tomorrow.toISOString());
       }
 
       const { data, error } = await query;
@@ -160,11 +175,6 @@ const MOBILE_HEADERS = [
       console.log('Sample record:', formattedData[0]);
       setTrackingData(formattedData);
       
-      // toast.success(`Loaded ${formattedData.length} records successfully`, {
-      //   duration: 3000,
-      //   position: "top-right",
-      // });
-
     } catch (err) {
       console.error("❌ Error fetching tracking data:", err);
       setError(err.message);
@@ -203,32 +213,31 @@ const MOBILE_HEADERS = [
     }
   };
 
-  // Filter data by selected date first, then get dropdown options
-  const todaysData = trackingData.filter((item) => {
-    if (dateFilter && item.created_at) {
-      const itemDate = parseDate(item.created_at);
-      const filterDate = new Date(dateFilter);
-      
-      if (itemDate) {
-        return itemDate.toDateString() === filterDate.toDateString();
-      }
+  // Filter data based on user role
+  const filteredData = trackingData.filter((item) => {
+    // For non-admin users, we already filtered by date and sales person in the query
+    if (!isAdmin) {
+      // Only apply search term filter for non-admin users
+      const term = searchTerm.toLowerCase();
+      const matchesSearchTerm = !searchTerm || DISPLAY_HEADERS.some(header => {
+        const value = item[header.id];
+        return value && String(value).toLowerCase().includes(term);
+      });
+      return matchesSearchTerm;
     }
-    return !dateFilter; // If no date filter, return all
-  });
 
-  // Get dropdown options from today's data only
-  const uniqueDealers = [...new Set(todaysData.map(item => item.deler_distributer_site_name).filter(Boolean))];
-  const uniqueSalesPersons = [...new Set(todaysData.map(item => item.sales_person_name).filter(Boolean))];
-
-  // Apply additional filters on today's data
-  const filteredTrackingData = todaysData.filter((item) => {
+    // For admin users, apply all filters
     const term = searchTerm.toLowerCase();
     
-    // Search term filter - search across all displayed columns
+    // Search term filter
     const matchesSearchTerm = !searchTerm || DISPLAY_HEADERS.some(header => {
       const value = item[header.id];
       return value && String(value).toLowerCase().includes(term);
     });
+
+    // Date filter for admin
+    const matchesDate = !dateFilter || (item.created_at && 
+      parseDate(item.created_at)?.toDateString() === new Date(dateFilter).toDateString());
 
     // Dealer filter
     const matchesDealer = !dealerFilter || item.deler_distributer_site_name === dealerFilter;
@@ -236,12 +245,39 @@ const MOBILE_HEADERS = [
     // Sales person filter
     const matchesSalesPerson = !salesPersonFilter || item.sales_person_name === salesPersonFilter;
 
-    return matchesSearchTerm && matchesDealer && matchesSalesPerson;
+    return matchesSearchTerm && matchesDate && matchesDealer && matchesSalesPerson;
   });
+
+  // Get dropdown options based on user role
+  const getFilterOptions = () => {
+    if (!isAdmin) {
+      return {
+        dealers: [...new Set(trackingData.map(item => item.deler_distributer_site_name).filter(Boolean))],
+        salesPersons: [currentUserSalesPersonName] // Only show current user
+      };
+    }
+
+    // For admin, get options from filtered data by date first
+    const dateFilteredData = dateFilter ? trackingData.filter(item => {
+      if (dateFilter && item.created_at) {
+        const itemDate = parseDate(item.created_at);
+        const filterDate = new Date(dateFilter);
+        return itemDate?.toDateString() === filterDate.toDateString();
+      }
+      return !dateFilter;
+    }) : trackingData;
+
+    return {
+      dealers: [...new Set(dateFilteredData.map(item => item.deler_distributer_site_name).filter(Boolean))],
+      salesPersons: [...new Set(dateFilteredData.map(item => item.sales_person_name).filter(Boolean))]
+    };
+  };
+
+  const { dealers: uniqueDealers, salesPersons: uniqueSalesPersons } = getFilterOptions();
 
   // PDF download function
   const downloadPDF = async () => {
-    if (!filteredTrackingData || filteredTrackingData.length === 0) {
+    if (!filteredData || filteredData.length === 0) {
       toast.error("No data to export", { duration: 3000, position: "top-right" });
       return;
     }
@@ -258,22 +294,34 @@ const MOBILE_HEADERS = [
         format: 'a4'
       });
 
-      const selectedDate = dateFilter ? new Date(dateFilter).toLocaleDateString('en-GB') : 'All dates';
+      const reportTitle = !isAdmin 
+        ? `Today's Report - ${currentUserSalesPersonName}`
+        : `Daily Report - Tracking History`;
+
+      const selectedDate = !isAdmin 
+        ? new Date().toLocaleDateString('en-GB')
+        : dateFilter 
+          ? new Date(dateFilter).toLocaleDateString('en-GB') 
+          : 'All dates';
 
       // Title
       doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
-      doc.text('Daily Report - Tracking History', 20, 20);
+      doc.text(reportTitle, 20, 20);
 
       // Meta info
       doc.setFontSize(10);
       doc.text(`Report Date: ${selectedDate}`, 20, 30);
       doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 36);
-      doc.text(`Records: ${filteredTrackingData.length}`, 20, 42);
+      doc.text(`Records: ${filteredData.length}`, 20, 42);
+      
+      if (!isAdmin) {
+        doc.text(`Sales Person: ${currentUserSalesPersonName}`, 20, 48);
+      }
 
       // Manual table creation
-      let yPos = 55;
-const colWidths = [45, 60, 35, 35, 90, 40]; 
+      let yPos = !isAdmin ? 60 : 55;
+      const colWidths = [45, 60, 35, 35, 90, 40]; 
       let xPos = 20;
 
       // Header row
@@ -289,7 +337,7 @@ const colWidths = [45, 60, 35, 35, 90, 40];
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
 
-      filteredTrackingData.forEach(item => {
+      filteredData.forEach(item => {
         xPos = 20;
         DISPLAY_HEADERS.forEach((header, i) => {
           const value = String(item[header.id] || '');
@@ -313,7 +361,10 @@ const colWidths = [45, 60, 35, 35, 90, 40];
       });
 
       // Save
-      const filename = `Daily_Report_${new Date().toISOString().slice(0,10).replace(/-/g, '_')}.pdf`;
+      const filename = !isAdmin 
+        ? `Today_Report_${currentUserSalesPersonName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10).replace(/-/g, '_')}.pdf`
+        : `Daily_Report_${new Date().toISOString().slice(0,10).replace(/-/g, '_')}.pdf`;
+      
       doc.save(filename);
 
       toast.dismiss(loadingToast);
@@ -339,7 +390,7 @@ const colWidths = [45, 60, 35, 35, 90, 40];
         <div className="flex-shrink-0 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-3">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">
-              Records ({items.length})
+              {!isAdmin ? "Today's Records" : "Records"} ({items.length})
             </h3>
             <div className="text-xs text-gray-500">
               Scroll to view
@@ -357,8 +408,12 @@ const colWidths = [45, 60, 35, 35, 90, 40];
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <p className="text-gray-500 font-medium">No records found</p>
-                <p className="text-gray-400 text-sm mt-1">Try adjusting your filters</p>
+                <p className="text-gray-500 font-medium">
+                  {!isAdmin ? "No records for today" : "No records found"}
+                </p>
+                <p className="text-gray-400 text-sm mt-1">
+                  {!isAdmin ? "Check back later for today's entries" : "Try adjusting your filters"}
+                </p>
               </div>
             ) : (
               items.map((item) => (
@@ -422,9 +477,11 @@ const colWidths = [45, 60, 35, 35, 90, 40];
                     colSpan={DISPLAY_HEADERS.length}
                     className="px-6 py-12 text-center text-gray-500 font-medium text-base"
                   >
-                    {dateFilter 
-                      ? `No records found for ${new Date(dateFilter).toLocaleDateString('en-GB')}`
-                      : "No tracking data found."}
+                    {!isAdmin 
+                      ? `No records found for today (${new Date().toLocaleDateString('en-GB')})`
+                      : dateFilter 
+                        ? `No records found for ${new Date(dateFilter).toLocaleDateString('en-GB')}`
+                        : "No tracking data found."}
                     {(searchTerm || dealerFilter || salesPersonFilter) && (
                       <div className="text-sm mt-2">Try clearing the search or filter options.</div>
                     )}
@@ -460,9 +517,10 @@ const colWidths = [45, 60, 35, 35, 90, 40];
         {/* Show record count */}
         {items.length > 0 && (
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600 text-center">
-            Showing {items.length} records
-            {dateFilter && ` for ${new Date(dateFilter).toLocaleDateString('en-GB')}`}
-            {(dealerFilter || salesPersonFilter) && " (filtered)"}
+            {!isAdmin 
+              ? `Showing ${items.length} today's records for ${currentUserSalesPersonName}`
+              : `Showing ${items.length} records${dateFilter ? ` for ${new Date(dateFilter).toLocaleDateString('en-GB')}` : ''}${(dealerFilter || salesPersonFilter) ? " (filtered)" : ""}`
+            }
           </div>
         )}
       </div>
@@ -526,10 +584,10 @@ const colWidths = [45, 60, 35, 35, 90, 40];
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div className="text-center lg:text-left">
                   <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
-                    Daily Report
+                    {!isAdmin ? "Today's Report" : "Daily Report"}
                   </h3>
                   <p className="text-orange-50 text-sm lg:text-lg hidden md:block">
-                    Tracking History & Dealer Interactions
+                    {!isAdmin ? `Today's tracking for ${currentUserSalesPersonName}` : "Tracking History & Dealer Interactions"}
                   </p>
                   <p className="text-orange-100 text-xs lg:text-sm mt-2 hidden md:block">
                     Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
@@ -537,7 +595,7 @@ const colWidths = [45, 60, 35, 35, 90, 40];
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   {/* Mobile Filter Toggle */}
-                  {isMobile && (
+                  {isMobile && isAdmin && (
                     <div className="relative">
                       <button
                         onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -550,7 +608,7 @@ const colWidths = [45, 60, 35, 35, 90, 40];
                   )}
                   <button
                     onClick={downloadPDF}
-                    disabled={filteredTrackingData.length === 0}
+                    disabled={filteredData.length === 0}
                     className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
                   >
                     <Download className="h-4 w-4" />
@@ -562,8 +620,8 @@ const colWidths = [45, 60, 35, 35, 90, 40];
 
             {/* Filters Section */}
             <div className="p-4 lg:p-8">
-              {/* Mobile Filter Dropdown */}
-              {isMobile && isFilterOpen && (
+              {/* Mobile Filter Dropdown - Only for Admin */}
+              {isMobile && isFilterOpen && isAdmin && (
                 <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -625,8 +683,8 @@ const colWidths = [45, 60, 35, 35, 90, 40];
                 </div>
               )}
 
-              {/* Desktop Filters */}
-              {!isMobile && (
+              {/* Desktop Filters - Only for Admin */}
+              {!isMobile && isAdmin && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -676,25 +734,25 @@ const colWidths = [45, 60, 35, 35, 90, 40];
                 </div>
               )}
 
-              {/* Mobile Search Bar (when filters are closed) */}
-              {isMobile && !isFilterOpen && (
+              {/* Search Bar for Users or when filters are closed on mobile */}
+              {(isMobile && !isFilterOpen) || !isAdmin ? (
                 <div className="mb-4 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="search"
-                    placeholder="Search records..."
+                    placeholder={!isAdmin ? "Search today's records..." : "Search records..."}
                     className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-              )}
+              ) : null}
 
               {/* Data Display */}
               {isMobile ? (
-                <MobileCardView items={filteredTrackingData} />
+                <MobileCardView items={filteredData} />
               ) : (
-                <DesktopTableView items={filteredTrackingData} />
+                <DesktopTableView items={filteredData} />
               )}
             </div>
           </div>

@@ -17,6 +17,7 @@ import Attendance from "./pages/Attendents";
 import Sidebar from "./components/Sidebaar";
 import DailyReport from "./pages/Dailyreport";
 import AdminLogs from "./pages/AdminLogs";
+import UserManagement from "./pages/UserManagement"; // Add this import
 import supabase from "./SupaabseClient";
 import AttendanceHistoryPage from "./pages/AttendanceHistoryPage";
 
@@ -351,6 +352,7 @@ const App = () => {
         const userInfo = {
           username: data.user_name,
           role: data.role || "user",
+          position: data.position || "",
           salesPersonName: data.sales_person_name || "Unknown Sales Person",
           loginTime: new Date().toISOString(),
           tabs: data.access === "all" 
@@ -363,6 +365,7 @@ const App = () => {
                 "Attendance",
                 "Attendance History",
                 "Daily Report",
+                "User Management", // Add User Management for admins
                 ...(userIsAdmin ? ["Admin Logs"] : [])
               ]
             : (data.access || "").split(",").map((t) => t.trim()).filter(Boolean),
@@ -512,10 +515,10 @@ const App = () => {
                   {/* User Greeting */}
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6">
                     <p className="text-lg font-medium text-gray-700">
-                      Hello, <span className="font-bold text-blue-600">{currentUser.username}</span>!
+                      Hello, <span className="font-bold text-blue-600">{currentUser.salesPersonName}</span>!
                     </p>
                     <p className="text-sm text-gray-500 mt-1">
-                      Role: <span className="font-medium capitalize">{currentUser.role}</span>
+                      Role: <span className="font-medium capitalize">{currentUser.position}</span>
                     </p>
                   </div>
                   
@@ -629,6 +632,14 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <DailyReport />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/user-management"
+                    element={
+                      <ProtectedRoute adminOnly={true}>
+                        <UserManagement />
                       </ProtectedRoute>
                     }
                   />

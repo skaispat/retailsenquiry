@@ -14,6 +14,7 @@ import {
   Shield,
   Clock,
   FileText,
+  Users // Add this import for User Management
 } from "lucide-react";
 import { AuthContext } from "../App"; 
 import logo from '../../public/logo.jpeg';
@@ -73,6 +74,13 @@ function Sidebar({ userType, username, tabs = [] }) {
       color: "text-blue-500",
     },
     {
+      label: "User Management",
+      icon: Users,
+      href: "/user-management",
+      color: "text-indigo-500",
+      adminOnly: true
+    },
+    {
       label: "Admin Logs",
       icon: Shield,
       href: "/admin-logs",
@@ -112,7 +120,8 @@ function Sidebar({ userType, username, tabs = [] }) {
       >
         {/* Header */}
         <div className="flex flex-col items-center py-4 px-4 border-b border-slate-200/50 flex-shrink-0">
-          {/* Logo */} <h1 className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 text-xl text-center">
+          {/* Logo */} 
+          <h1 className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 text-xl text-center">
             Retail EMS
           </h1>
           <div className="mb-3 mt-4">
@@ -227,17 +236,6 @@ function Sidebar({ userType, username, tabs = [] }) {
       >
         <Menu className="h-5 w-5" />
       </button>
-
-      {/* Additional Mobile Logout Button - Only shows when sidebar is collapsed on mobile */}
-      {/* {!isCollapsed && (
-        <button
-          className="lg:hidden fixed bottom-4 right-4 z-50 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg border border-red-600 hover:from-red-600 hover:to-red-700 p-3"
-          onClick={handleLogout}
-          title="Logout"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
-      )} */}
     </>
   );
 }
