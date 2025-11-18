@@ -34,6 +34,12 @@ function Dashboard() {
   const [dialogData, setDialogData] = useState([]);
   const [dialogHeaders, setDialogHeaders] = useState([]);
 
+  // FIXED: Helper function to normalize names (remove spaces and make lowercase)
+  const normalizeName = (name) => {
+    if (!name) return '';
+    return String(name).toLowerCase().replace(/\s+/g, '').trim();
+  };
+
   // FMS columns configuration
   const FMS_COLUMNS_INFO = {
     timestamp: { label: "Timestamp", property: "timestamp", type: "datetime" },
@@ -99,7 +105,7 @@ function Dashboard() {
     }
   };
 
-  // FIXED: Fetch data from Supabase with proper timestamp handling
+  // FIXED: Fetch data from Supabase with space-insensitive salesperson matching
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -120,10 +126,6 @@ function Dashboard() {
           .select('*')
           .order('timestamp', { ascending: false });
 
-        if (userRole.toLowerCase() !== 'admin') {
-          query = query.eq('sales_person_name', currentUserSalesPersonName);
-        }
-
         const { data, error } = await query;
 
         if (error) {
@@ -133,12 +135,22 @@ function Dashboard() {
         console.log("✅ FMS data loaded successfully from Supabase");
 
         if (data && data.length > 0) {
+          // FIXED: Normalize current user's salesperson name for comparison
+          const currentUserNormalizedName = normalizeName(currentUserSalesPersonName);
+          
+          console.log("🔍 Name Matching Debug:", {
+            original: currentUserSalesPersonName,
+            normalized: currentUserNormalizedName,
+            userRole: userRole,
+            isAdmin: isAdmin
+          });
+
           const allRows = data.map((row, rowIndex) => {
             const rowData = { 
               _rowIndex: rowIndex,
               id: row.id,
               timestamp: row.timestamp,
-              timestamp_raw: row.timestamp, // FIXED: Store raw timestamp for filtering
+              timestamp_raw: row.timestamp,
               dealer_code: row.dealer_code || row.reg_xyy || row.dc_dealer_code || null,
               dealer_name: row.dealer_name,
               dealer_region: row.dealer_region || row.district_name,
@@ -161,12 +173,13 @@ function Dashboard() {
               select_value: row.select_value,
               planned: row.planned,
               actual: row.actual,
+              // FIXED: Add normalized salesperson name for easy filtering
+              sales_person_name_normalized: normalizeName(row.sales_person_name)
             };
 
-            // FIXED: Format date fields but keep timestamp raw
+            // Format date fields but keep timestamp raw
             Object.keys(FMS_COLUMNS_INFO).forEach(key => {
               const columnInfo = FMS_COLUMNS_INFO[key];
-              // Skip timestamp - we need it raw for filtering
               if (columnInfo.property === 'timestamp') {
                 return;
               }
@@ -178,10 +191,33 @@ function Dashboard() {
             return rowData;
           });
 
-          setAllFMSData(allRows);
+          // FIXED: For non-admin users, filter by normalized salesperson name (space-insensitive)
+          let filteredRows = allRows;
+          if (!isAdmin) {
+            filteredRows = allRows.filter(row => 
+              row.sales_person_name_normalized === currentUserNormalizedName
+            );
+            
+            console.log("🔍 Frontend Filtering Results:", {
+              totalRecords: allRows.length,
+              filteredRecords: filteredRows.length,
+              matchedRecords: filteredRows.length
+            });
+
+            // Debug: Show mismatched names for troubleshooting
+            if (filteredRows.length === 0 && allRows.length > 0) {
+              console.log("⚠️ No matching records found. Available salesperson names in data:");
+              const uniqueNames = [...new Set(allRows.map(row => row.sales_person_name))];
+              uniqueNames.forEach(name => {
+                console.log(`  - "${name}" (normalized: "${normalizeName(name)}")`);
+              });
+            }
+          }
+
+          setAllFMSData(filteredRows);
 
           const salespersons = new Set();
-          allRows.forEach(row => {
+          filteredRows.forEach(row => {
             const salespersonName = row.sales_person_name;
             if (salespersonName && typeof salespersonName === 'string' && salespersonName.trim() !== '') {
               salespersons.add(salespersonName.trim());
@@ -212,9 +248,9 @@ function Dashboard() {
     };
 
     fetchData();
-  }, [isAuthenticated, currentUser, currentUserSalesPersonName, userRole]);
+  }, [isAuthenticated, currentUser, currentUserSalesPersonName, userRole, isAdmin]);
 
-  // FIXED: Enhanced filtering with proper Supabase timestamp handling
+  // FIXED: Enhanced filtering with space-insensitive salesperson matching
   const currentFilteredData = useMemo(() => {
     if (allFMSData.length === 0 || !isAuthenticated || !currentUser) {
       return [];
@@ -222,23 +258,22 @@ function Dashboard() {
 
     let tempFilteredData = [...allFMSData];
 
-    // First filter by salesperson
-    tempFilteredData = tempFilteredData.filter((row) => {
-      const rowSalespersonName = row.sales_person_name;
-      const currentUserNameNormalized = currentUserSalesPersonName ? currentUserSalesPersonName.trim().toLowerCase() : '';
-      const rowSalespersonNameNormalized = rowSalespersonName ? String(rowSalespersonName).trim().toLowerCase() : '';
+    // FIXED: For admin users, apply salesperson filter from dropdown with space-insensitive matching
+    if (isAdmin && selectedSalesperson && selectedSalesperson !== "All Salespersons") {
+      const selectedSalespersonNormalized = normalizeName(selectedSalesperson);
+      
+      tempFilteredData = tempFilteredData.filter(row => 
+        row.sales_person_name_normalized === selectedSalespersonNormalized
+      );
 
-      if (isAdmin) {
-        if (selectedSalesperson === "" || selectedSalesperson === "All Salespersons") {
-          return true;
-        }
-        return rowSalespersonNameNormalized === selectedSalesperson.trim().toLowerCase();
-      } else {
-        return rowSalespersonNameNormalized === currentUserNameNormalized;
-      }
-    });
+      console.log("🔍 Admin Filtering:", {
+        selectedSalesperson: selectedSalesperson,
+        normalized: selectedSalespersonNormalized,
+        filteredCount: tempFilteredData.length
+      });
+    }
 
-    // FIXED: Filter by date range using raw timestamp with proper Supabase format handling
+    // FIXED: Date filtering with proper Supabase timestamp handling
     if (startDate && endDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -258,7 +293,7 @@ function Dashboard() {
         try {
           let rowDate;
           
-          // FIXED: Handle Supabase timestamp format: "2025-10-31 17:53:14+00"
+          // Handle Supabase timestamp format: "2025-10-31 17:53:14+00"
           if (typeof timestampToUse === 'string') {
             let isoTimestamp = timestampToUse.trim();
             
@@ -283,11 +318,6 @@ function Dashboard() {
           }
           
           const isInRange = rowDate >= start && rowDate <= end;
-          
-          if (isInRange) {
-            console.log("✅ Date match:", row.dealer_code, row.dealer_name, "Date:", rowDate.toLocaleDateString());
-          }
-          
           return isInRange;
         } catch (error) {
           console.error('Date filtering error:', error, 'Date value:', timestampToUse);
@@ -301,7 +331,7 @@ function Dashboard() {
     console.log("✅ Final filtered data count:", tempFilteredData.length);
     
     return tempFilteredData;
-  }, [allFMSData, startDate, endDate, isAdmin, currentUserSalesPersonName, selectedSalesperson, isAuthenticated, currentUser]);
+  }, [allFMSData, startDate, endDate, isAdmin, selectedSalesperson, isAuthenticated, currentUser]);
 
   const filteredDataRef = useRef([]);
   useEffect(() => {
