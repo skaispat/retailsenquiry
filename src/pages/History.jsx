@@ -457,7 +457,7 @@ const History = () => {
                         <div className="flex-1">
                           <div className="flex justify-between">
                             <h3 className="font-bold text-gray-900 text-base mb-1">
-                              {item.dealer_distributor_site || "Unknown Dealer"}
+                              {item.deler_distributer_site_name || "Unknown Dealer"}
                             </h3>
                             <p className="font-semibold text-gray-700 text-sm">{item.select_value}</p>
                           </div>
