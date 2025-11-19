@@ -87,7 +87,7 @@ const History = () => {
         "Order Products": "order_products",
         "Value of Order": "value_of_order",
         "Payment (Yes/No)": "payment_yes_no",
-        "Dealer/Distributor Site": "dealer_distributor_site",
+        "Dealer/Distributor Site": "deler_distributer_site_name",
         "Select Value": "select_value",
         // Location column will be added conditionally for admin
       };
