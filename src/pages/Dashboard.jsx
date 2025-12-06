@@ -34,7 +34,7 @@ function Dashboard() {
   const [dialogData, setDialogData] = useState([]);
   const [dialogHeaders, setDialogHeaders] = useState([]);
 
-  // FIXED: Helper function to normalize names (remove spaces and make lowercase)
+  // Helper function to normalize names (remove spaces and make lowercase)
   const normalizeName = (name) => {
     if (!name) return '';
     return String(name).toLowerCase().replace(/\s+/g, '').trim();
@@ -105,7 +105,86 @@ function Dashboard() {
     }
   };
 
-  // FIXED: Fetch data from Supabase with space-insensitive salesperson matching
+  // Helper function to parse date from various formats
+  const parseSupabaseDate = (dateString) => {
+    if (!dateString) return null;
+    
+    try {
+      const cleanedDate = dateString.toString().trim();
+      
+      // 1. Handle DD/MM/YYYY format
+      if (cleanedDate.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+        const parts = cleanedDate.split('/');
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+      
+      // 2. Handle YYYY-MM-DD format
+      if (cleanedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return new Date(cleanedDate);
+      }
+      
+      // 3. Handle other formats with fallback
+      return new Date(cleanedDate);
+      
+    } catch (error) {
+      console.error('Date parsing error:', error);
+      return null;
+    }
+  };
+
+  // Filter data based on salesperson and timestamp
+  const currentFilteredData = useMemo(() => {
+    if (allFMSData.length === 0 || !isAuthenticated || !currentUser) {
+      return [];
+    }
+
+    let tempFilteredData = [...allFMSData];
+
+    // Apply salesperson filter for admin users
+    if (isAdmin && selectedSalesperson && selectedSalesperson !== "All Salespersons") {
+      const selectedSalespersonNormalized = normalizeName(selectedSalesperson);
+      tempFilteredData = tempFilteredData.filter(row => 
+        row.sales_person_name_normalized === selectedSalespersonNormalized
+      );
+    }
+
+    // Apply date filtering by timestamp
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      tempFilteredData = tempFilteredData.filter((row) => {
+        const timestampToUse = row.timestamp_raw || row.timestamp;
+        if (!timestampToUse) return false;
+        
+        try {
+          let rowDate;
+          if (typeof timestampToUse === 'string') {
+            let isoTimestamp = timestampToUse.trim();
+            if (isoTimestamp.includes(' ')) isoTimestamp = isoTimestamp.replace(' ', 'T');
+            if (isoTimestamp.match(/[+-]\d{2}$/)) isoTimestamp = isoTimestamp + ':00';
+            rowDate = new Date(isoTimestamp);
+          } else {
+            rowDate = new Date(timestampToUse);
+          }
+          
+          if (isNaN(rowDate.getTime())) return false;
+          return rowDate >= start && rowDate <= end;
+        } catch (error) {
+          return false;
+        }
+      });
+    }
+
+    return tempFilteredData;
+  }, [allFMSData, startDate, endDate, isAdmin, selectedSalesperson, isAuthenticated, currentUser]);
+
+  // Fetch data from Supabase
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -119,8 +198,6 @@ function Dashboard() {
       }
 
       try {
-        console.log("🔄 Fetching data from Supabase FMS table...");
-
         let query = supabase
           .from('FMS')
           .select('*')
@@ -132,26 +209,16 @@ function Dashboard() {
           throw new Error(`Supabase error: ${error.message}`);
         }
 
-        console.log("✅ FMS data loaded successfully from Supabase");
-
         if (data && data.length > 0) {
-          // FIXED: Normalize current user's salesperson name for comparison
           const currentUserNormalizedName = normalizeName(currentUserSalesPersonName);
           
-          console.log("🔍 Name Matching Debug:", {
-            original: currentUserSalesPersonName,
-            normalized: currentUserNormalizedName,
-            userRole: userRole,
-            isAdmin: isAdmin
-          });
-
-          const allRows = data.map((row, rowIndex) => {
+          const allRows = data.map((row) => {
             const rowData = { 
-              _rowIndex: rowIndex,
               id: row.id,
               timestamp: row.timestamp,
               timestamp_raw: row.timestamp,
-              dealer_code: row.dealer_code || row.reg_xyy || row.dc_dealer_code || null,
+              // FIXED: Use dc_dealer_code as dealer_code
+              dealer_code: row.dc_dealer_code || row.dealer_code || null,
               dealer_name: row.dealer_name,
               dealer_region: row.dealer_region || row.district_name,
               sales_person_name: row.sales_person_name,
@@ -173,11 +240,10 @@ function Dashboard() {
               select_value: row.select_value,
               planned: row.planned,
               actual: row.actual,
-              // FIXED: Add normalized salesperson name for easy filtering
               sales_person_name_normalized: normalizeName(row.sales_person_name)
             };
 
-            // Format date fields but keep timestamp raw
+            // Format date fields
             Object.keys(FMS_COLUMNS_INFO).forEach(key => {
               const columnInfo = FMS_COLUMNS_INFO[key];
               if (columnInfo.property === 'timestamp') {
@@ -191,31 +257,17 @@ function Dashboard() {
             return rowData;
           });
 
-          // FIXED: For non-admin users, filter by normalized salesperson name (space-insensitive)
+          // Filter by salesperson for non-admin users
           let filteredRows = allRows;
           if (!isAdmin) {
             filteredRows = allRows.filter(row => 
               row.sales_person_name_normalized === currentUserNormalizedName
             );
-            
-            console.log("🔍 Frontend Filtering Results:", {
-              totalRecords: allRows.length,
-              filteredRecords: filteredRows.length,
-              matchedRecords: filteredRows.length
-            });
-
-            // Debug: Show mismatched names for troubleshooting
-            if (filteredRows.length === 0 && allRows.length > 0) {
-              console.log("⚠️ No matching records found. Available salesperson names in data:");
-              const uniqueNames = [...new Set(allRows.map(row => row.sales_person_name))];
-              uniqueNames.forEach(name => {
-                console.log(`  - "${name}" (normalized: "${normalizeName(name)}")`);
-              });
-            }
           }
 
           setAllFMSData(filteredRows);
 
+          // Extract unique salespersons
           const salespersons = new Set();
           filteredRows.forEach(row => {
             const salespersonName = row.sales_person_name;
@@ -226,22 +278,13 @@ function Dashboard() {
           setUniqueSalespersons([...Array.from(salespersons).sort()]);
 
         } else {
-          console.log("No data found in FMS table for user:", currentUserSalesPersonName);
           setAllFMSData([]);
           setUniqueSalespersons([]);
-          setTotalCount(0);
-          setActiveDealersCount(0);
-          setTotalOrdersCount(0);
-          setPendingEnquiriesCount(0);
           setError("No data found in the FMS table.");
         }
       } catch (error) {
-        console.error("DEBUG: Error fetching data:", error);
+        console.error("Error fetching data:", error);
         setError(`Failed to load data: ${error.message}`);
-        setTotalCount(0);
-        setActiveDealersCount(0);
-        setTotalOrdersCount(0);
-        setPendingEnquiriesCount(0);
       } finally {
         setIsLoading(false);
       }
@@ -250,194 +293,214 @@ function Dashboard() {
     fetchData();
   }, [isAuthenticated, currentUser, currentUserSalesPersonName, userRole, isAdmin]);
 
-  // FIXED: Enhanced filtering with space-insensitive salesperson matching
-  const currentFilteredData = useMemo(() => {
-    if (allFMSData.length === 0 || !isAuthenticated || !currentUser) {
-      return [];
-    }
+  // Calculate all counts
+ // FIXED: Calculate all counts with proper active dealer logic
+useEffect(() => {
+  if (allFMSData.length === 0) {
+    setTotalCount(0);
+    setActiveDealersCount(0);
+    setTotalOrdersCount(0);
+    setPendingEnquiriesCount(0);
+    return;
+  }
 
-    let tempFilteredData = [...allFMSData];
+  // Start with all data
+  let dataForCounts = [...allFMSData];
 
-    // FIXED: For admin users, apply salesperson filter from dropdown with space-insensitive matching
-    if (isAdmin && selectedSalesperson && selectedSalesperson !== "All Salespersons") {
-      const selectedSalespersonNormalized = normalizeName(selectedSalesperson);
+  // 1. Apply salesperson filter if selected (for all counts)
+  if (isAdmin && selectedSalesperson && selectedSalesperson !== "All Salespersons") {
+    const selectedSalespersonNormalized = normalizeName(selectedSalesperson);
+    dataForCounts = dataForCounts.filter(row => 
+      row.sales_person_name_normalized === selectedSalespersonNormalized
+    );
+  }
+
+  console.log("🔍 Data after salesperson filter for counts:", dataForCounts.length);
+
+  // 2. TOTAL COUNT: Filter by timestamp when dates are selected
+  let totalFilteredData = [...dataForCounts];
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    totalFilteredData = totalFilteredData.filter((row) => {
+      const timestampToUse = row.timestamp_raw || row.timestamp;
+      if (!timestampToUse) return false;
       
-      tempFilteredData = tempFilteredData.filter(row => 
-        row.sales_person_name_normalized === selectedSalespersonNormalized
-      );
-
-      console.log("🔍 Admin Filtering:", {
-        selectedSalesperson: selectedSalesperson,
-        normalized: selectedSalespersonNormalized,
-        filteredCount: tempFilteredData.length
-      });
-    }
-
-    // FIXED: Date filtering with proper Supabase timestamp handling
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-
-      console.log("🕐 Date filtering - Start:", start.toISOString(), "End:", end.toISOString());
-
-      tempFilteredData = tempFilteredData.filter((row) => {
-        const timestampToUse = row.timestamp_raw || row.timestamp;
-        
-        if (!timestampToUse) {
-          console.log("❌ No timestamp for row:", row.dealer_code, row.dealer_name);
-          return false;
+      try {
+        let rowDate;
+        if (typeof timestampToUse === 'string') {
+          let isoTimestamp = timestampToUse.trim();
+          if (isoTimestamp.includes(' ')) isoTimestamp = isoTimestamp.replace(' ', 'T');
+          if (isoTimestamp.match(/[+-]\d{2}$/)) isoTimestamp = isoTimestamp + ':00';
+          rowDate = new Date(isoTimestamp);
+        } else {
+          rowDate = new Date(timestampToUse);
         }
         
-        try {
-          let rowDate;
-          
-          // Handle Supabase timestamp format: "2025-10-31 17:53:14+00"
-          if (typeof timestampToUse === 'string') {
-            let isoTimestamp = timestampToUse.trim();
-            
-            // Replace space with 'T' for ISO format
-            if (isoTimestamp.includes(' ')) {
-              isoTimestamp = isoTimestamp.replace(' ', 'T');
-            }
-            
-            // Fix timezone format: "+00" -> "+00:00"
-            if (isoTimestamp.match(/[+-]\d{2}$/)) {
-              isoTimestamp = isoTimestamp + ':00';
-            }
-            
-            rowDate = new Date(isoTimestamp);
-          } else {
-            rowDate = new Date(timestampToUse);
-          }
-          
-          if (isNaN(rowDate.getTime())) {
-            console.log("❌ Invalid timestamp:", timestampToUse, "for row:", row.dealer_code);
-            return false;
-          }
-          
-          const isInRange = rowDate >= start && rowDate <= end;
-          return isInRange;
-        } catch (error) {
-          console.error('Date filtering error:', error, 'Date value:', timestampToUse);
-          return false;
-        }
-      });
-      
-      console.log("📊 Records after date filtering:", tempFilteredData.length);
-    }
+        if (isNaN(rowDate.getTime())) return false;
+        return rowDate >= start && rowDate <= end;
+      } catch (error) {
+        return false;
+      }
+    });
+  }
+  
+  setTotalCount(totalFilteredData.length);
+  console.log("📊 Total records count (timestamp filtered):", totalFilteredData.length);
 
-    console.log("✅ Final filtered data count:", tempFilteredData.length);
-    
-    return tempFilteredData;
-  }, [allFMSData, startDate, endDate, isAdmin, selectedSalesperson, isAuthenticated, currentUser]);
+  // 3. TOTAL ORDERS COUNT: Use timestamp-filtered data
+  const ordersCount = totalFilteredData.filter(row => {
+    return row.value_of_order && String(row.value_of_order).trim() !== "";
+  }).length;
+  setTotalOrdersCount(ordersCount);
+  console.log("📊 Total orders count:", ordersCount);
 
-  const filteredDataRef = useRef([]);
-  useEffect(() => {
-    filteredDataRef.current = currentFilteredData;
-    console.log("🔄 filteredDataRef updated with:", currentFilteredData.length, "records");
-  }, [currentFilteredData]);
+  // 4. PENDING ENQUIRIES COUNT: Use timestamp-filtered data
+  const pendingCount = totalFilteredData.filter(row => {
+    const planned = row.planned;
+    const actual = row.actual;
+    return planned !== null && 
+           planned !== undefined && 
+           planned !== "" && 
+           (actual === null || actual === undefined || actual === "");
+  }).length;
+  setPendingEnquiriesCount(pendingCount);
+  console.log("📊 Pending enquiries count:", pendingCount);
 
-  // FIXED: Enhanced active dealers counting
-  useEffect(() => {
-    console.log("🔄 Recalculating counts with filtered data");
-    console.log("📊 Current filtered data length:", currentFilteredData.length);
-    console.log("📊 Date filters:", { startDate, endDate });
-
-    if (currentFilteredData.length === 0) {
-      console.log("❌ No filtered data, resetting all counts to 0");
-      setTotalCount(0);
-      setActiveDealersCount(0);
-      setTotalOrdersCount(0);
-      setPendingEnquiriesCount(0);
-      return;
-    }
-    
-    setTotalCount(currentFilteredData.length);
-    
-    const activeDealers = new Set();
-    
-    console.log("🔍 Analyzing first 5 records for active dealer criteria:");
-    currentFilteredData.slice(0, 5).forEach((row, index) => {
+  // 5. ACTIVE DEALERS COUNT: SPECIAL LOGIC - ONLY when stage is "Order Received"
+  console.log("🎯 ========== ACTIVE DEALERS CALCULATION ==========");
+  
+  const activeDealers = new Set();
+  const activeDealerDetails = [];
+  
+  // Start with dataForCounts (already filtered by salesperson if needed)
+  let dataForActiveDealers = [...dataForCounts];
+  
+  console.log("📊 Total records to check for active dealers:", dataForActiveDealers.length);
+  
+  // Step 1: Filter by stage = "Order Received"
+  const orderReceivedRecords = dataForActiveDealers.filter(row => {
+    const stage = row.stage || '';
+    const normalizedStage = stage.toString().trim().toLowerCase();
+    return normalizedStage === "order received";
+  });
+  
+  console.log("📊 Records with stage = 'Order Received':", orderReceivedRecords.length);
+  
+  // Debug: Show first few order received records
+  if (orderReceivedRecords.length > 0) {
+    console.log("🔍 Sample of 'Order Received' records (first 5):");
+    orderReceivedRecords.slice(0, 5).forEach((row, index) => {
       console.log(`Record ${index + 1}:`, {
         dealer_code: row.dealer_code,
         dealer_name: row.dealer_name,
         stage: row.stage,
-        select_value: row.select_value,
         status: row.status,
-        timestamp: row.timestamp_raw
+        last_date_of_call: row.last_date_of_call,
+        sales_person_name: row.sales_person_name
       });
     });
+  }
+  
+  // Step 2: Apply date filter to last_date_of_call if dates are selected
+  let filteredOrderReceivedRecords = [...orderReceivedRecords];
+  
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
-    currentFilteredData.forEach((row) => {
-      const dealerCode = row.dealer_code;
-      const selectValue = row.select_value;
-      const stage = row.stage;
-      const status = row.status;
-      
-      if (!dealerCode || dealerCode.trim() === "") {
-        return;
-      }
-      
-      const normalizedStage = stage ? String(stage).trim().toLowerCase() : '';
-      const normalizedStatus = status ? String(status).trim().toLowerCase() : '';
-      const normalizedSelectValue = selectValue ? String(selectValue).trim().toLowerCase() : '';
-      
-      const hasOrderReceived = 
-        normalizedStage === "order received" || 
-        normalizedStage.includes("order received") ||
-        normalizedStatus === "order received" ||
-        normalizedStatus.includes("order received");
-      
-      const isDealerType = 
-        normalizedSelectValue === "dealer" || 
-        normalizedSelectValue.includes("dealer");
-
-      if (hasOrderReceived ) {
-        activeDealers.add(dealerCode);
-        console.log("✅ ADDED Active dealer:", {
-          dealerCode,
-          dealerName: row.dealer_name,
-          stage: stage,
-          status: status,
-          selectValue: selectValue
-        });
-      }
+    console.log("🕐 Filtering by last_date_of_call date range:", {
+      start: start.toISOString(),
+      end: end.toISOString(),
+      formattedStart: start.toLocaleDateString('en-GB'),
+      formattedEnd: end.toLocaleDateString('en-GB')
     });
 
-    const activeDealersCount = activeDealers.size;
-    console.log("🎯 Final active dealers count:", activeDealersCount);
-    console.log("🎯 Active dealer codes:", Array.from(activeDealers));
-    setActiveDealersCount(activeDealersCount);
+    filteredOrderReceivedRecords = filteredOrderReceivedRecords.filter((row) => {
+      const lastCallDate = row.last_date_of_call;
+      if (!lastCallDate) {
+        console.log("❌ No last_date_of_call for dealer:", row.dealer_code, row.dealer_name);
+        return false;
+      }
+      
+      try {
+        const parsedDate = parseSupabaseDate(lastCallDate);
+        if (!parsedDate || isNaN(parsedDate.getTime())) {
+          console.log("❌ Could not parse date:", lastCallDate, "for dealer:", row.dealer_code);
+          return false;
+        }
+        
+        const isInRange = parsedDate >= start && parsedDate <= end;
+        
+        if (isInRange) {
+          console.log("✅ Date in range:", {
+            dealer_code: row.dealer_code,
+            last_date_of_call: lastCallDate,
+            parsedDate: parsedDate.toISOString()
+          });
+        }
+        
+        return isInRange;
+      } catch (error) {
+        console.error('Date filtering error:', error);
+        return false;
+      }
+    });
     
-    const ordersCount = currentFilteredData.filter(row => {
-      const hasOrder = row.value_of_order && String(row.value_of_order).trim() !== "";
-      return hasOrder;
-    }).length;
-    setTotalOrdersCount(ordersCount);
+    console.log("📊 Records after last_date_of_call date filtering:", filteredOrderReceivedRecords.length);
+  }
+  
+  // Step 3: Count unique dealers
+  filteredOrderReceivedRecords.forEach((row) => {
+    const dealerCode = row.dealer_code;
+    if (!dealerCode || dealerCode.trim() === "") {
+      return;
+    }
+    
+    if (!activeDealers.has(dealerCode)) {
+      activeDealers.add(dealerCode);
+      activeDealerDetails.push({
+        dealer_code: dealerCode,
+        dealer_name: row.dealer_name,
+        last_date_of_call: row.last_date_of_call,
+        stage: row.stage,
+        status: row.status,
+        sales_person_name: row.sales_person_name
+      });
+      
+      console.log("✅ ADDED Active Dealer:", {
+        dealer_code: dealerCode,
+        dealer_name: row.dealer_name,
+        stage: row.stage,
+        last_date_of_call: row.last_date_of_call,
+        sales_person_name: row.sales_person_name
+      });
+    }
+  });
 
-    const pendingCount = currentFilteredData.filter(row => {
-      const planned = row.planned;
-      const actual = row.actual;
-      const isPending = planned !== null && 
-             planned !== undefined && 
-             planned !== "" && 
-             (actual === null || actual === undefined || actual === "");
-      return isPending;
-    }).length;
+  const activeDealersCount = activeDealers.size;
+  
+  console.log("\n🎯 ========== ACTIVE DEALERS SUMMARY ==========");
+  console.log("📊 Unique active dealers found:", activeDealersCount);
+  console.log("📊 Active dealer details (first 10):", activeDealerDetails.slice(0, 10));
+  console.log("📊 Active dealer codes:", Array.from(activeDealers));
+  
+  setActiveDealersCount(activeDealersCount);
 
-    setPendingEnquiriesCount(pendingCount);
+  console.log("\n📈 ========== FINAL COUNTS SUMMARY ==========");
+  console.log("📊 Total Records:", totalFilteredData.length);
+  console.log("📊 Active Dealers:", activeDealersCount);
+  console.log("📊 Total Orders:", ordersCount);
+  console.log("📊 Pending Enquiries:", pendingCount);
+  console.log("📝 Active dealers: stage='Order Received' + last_date_of_call date filter");
 
-    console.log("📈 Final counts:", {
-      total: currentFilteredData.length,
-      activeDealers: activeDealersCount,
-      totalOrders: ordersCount,
-      pendingEnquiries: pendingCount
-    });
-  }, [currentFilteredData, startDate, endDate]);
+}, [allFMSData, startDate, endDate, isAdmin, selectedSalesperson]);
 
-  // FIXED: handleCardClick for Active Dealers
   const handleCardClick = (kpiType) => {
     let dataForDialog = [];
     let title = "";
@@ -446,53 +509,152 @@ function Dashboard() {
       FMS_COLUMNS_INFO[columnKey]
     ).filter(Boolean);
 
-    const dataToFilter = filteredDataRef.current;
+    // Apply base filters
+    let baseData = [...allFMSData];
+    if (isAdmin && selectedSalesperson && selectedSalesperson !== "All Salespersons") {
+      const selectedSalespersonNormalized = normalizeName(selectedSalesperson);
+      baseData = baseData.filter(row => 
+        row.sales_person_name_normalized === selectedSalespersonNormalized
+      );
+    }
 
     if (kpiType === "totalRecords") {
       title = "All Records";
-      dataForDialog = dataToFilter;
-    } else if (kpiType === "activeDealers") {
-      title = "Active Dealers";
-      const uniqueDealerCodes = new Set();
-      
-      dataForDialog = dataToFilter.filter(row => {
-        const dealerCode = row.dealer_code;
-        const selectValue = row.select_value;
-        const stage = row.stage;
-        const status = row.status;
-        
-        if (!dealerCode || dealerCode.trim() === "") {
-          return false;
-        }
-        
-        const normalizedStage = stage ? String(stage).trim().toLowerCase() : '';
-        const normalizedStatus = status ? String(status).trim().toLowerCase() : '';
-        const normalizedSelectValue = selectValue ? String(selectValue).trim().toLowerCase() : '';
-        
-        const hasOrderReceived = 
-          normalizedStage === "order received" || 
-          normalizedStage.includes("order received") ||
-          normalizedStatus === "order received" ||
-          normalizedStatus.includes("order received");
-        
-        const isDealerType = 
-          normalizedSelectValue === "dealer" || 
-          normalizedSelectValue.includes("dealer");
-
-        if (hasOrderReceived  && !uniqueDealerCodes.has(dealerCode)) {
-          uniqueDealerCodes.add(dealerCode);
-          return true;
-        }
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dataForDialog = baseData.filter((row) => {
+          const timestampToUse = row.timestamp_raw || row.timestamp;
+          if (!timestampToUse) return false;
+          try {
+            let rowDate;
+            if (typeof timestampToUse === 'string') {
+              let isoTimestamp = timestampToUse.trim();
+              if (isoTimestamp.includes(' ')) isoTimestamp = isoTimestamp.replace(' ', 'T');
+              if (isoTimestamp.match(/[+-]\d{2}$/)) isoTimestamp = isoTimestamp + ':00';
+              rowDate = new Date(isoTimestamp);
+            } else {
+              rowDate = new Date(timestampToUse);
+            }
+            if (isNaN(rowDate.getTime())) return false;
+            return rowDate >= start && rowDate <= end;
+          } catch (error) {
+            return false;
+          }
+        });
+      } else {
+        dataForDialog = baseData;
+      }
+  } else if (kpiType === "activeDealers") {
+  title = "Active Dealers";
+  const uniqueDealerCodes = new Set();
+  
+  // Start with base data
+  let tempData = [...baseData];
+  
+  // Step 1: Filter by stage = "Order Received"
+  tempData = tempData.filter(row => {
+    const stage = row.stage || '';
+    const normalizedStage = stage.toString().trim().toLowerCase();
+    return normalizedStage === "order received";
+  });
+  
+  console.log("📋 Active dealers dialog: Found", tempData.length, "records with 'Order Received' stage");
+  
+  // Step 2: Apply date filter to last_date_of_call if dates are selected
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    
+    tempData = tempData.filter((row) => {
+      const lastCallDate = row.last_date_of_call;
+      if (!lastCallDate) return false;
+      try {
+        const parsedDate = parseSupabaseDate(lastCallDate);
+        if (!parsedDate || isNaN(parsedDate.getTime())) return false;
+        return parsedDate >= start && parsedDate <= end;
+      } catch (error) {
         return false;
-      });
-      
-      console.log("📋 Active dealers dialog data count:", dataForDialog.length);
-    } else if (kpiType === "totalOrders") {
+      }
+    });
+    
+    console.log("📋 Active dealers dialog: After date filtering:", tempData.length, "records");
+  }
+  
+  // Get unique dealers
+  tempData.forEach(row => {
+    const dealerCode = row.dealer_code;
+    if (!dealerCode) return;
+    
+    if (!uniqueDealerCodes.has(dealerCode)) {
+      uniqueDealerCodes.add(dealerCode);
+      dataForDialog.push(row);
+    }
+  });
+  
+  console.log("📋 Active dealers dialog data count:", dataForDialog.length);
+} else if (kpiType === "totalOrders") {
       title = "Total Orders";
-      dataForDialog = dataToFilter.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "");
+      let tempData = [...baseData];
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        tempData = tempData.filter((row) => {
+          const timestampToUse = row.timestamp_raw || row.timestamp;
+          if (!timestampToUse) return false;
+          try {
+            let rowDate;
+            if (typeof timestampToUse === 'string') {
+              let isoTimestamp = timestampToUse.trim();
+              if (isoTimestamp.includes(' ')) isoTimestamp = isoTimestamp.replace(' ', 'T');
+              if (isoTimestamp.match(/[+-]\d{2}$/)) isoTimestamp = isoTimestamp + ':00';
+              rowDate = new Date(isoTimestamp);
+            } else {
+              rowDate = new Date(timestampToUse);
+            }
+            if (isNaN(rowDate.getTime())) return false;
+            return rowDate >= start && rowDate <= end;
+          } catch (error) {
+            return false;
+          }
+        });
+      }
+      dataForDialog = tempData.filter(row => row.value_of_order && String(row.value_of_order).trim() !== "");
     } else if (kpiType === "pendingEnquiries") {
       title = "Pending Enquiries";
-      dataForDialog = dataToFilter.filter(row => {
+      let tempData = [...baseData];
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        tempData = tempData.filter((row) => {
+          const timestampToUse = row.timestamp_raw || row.timestamp;
+          if (!timestampToUse) return false;
+          try {
+            let rowDate;
+            if (typeof timestampToUse === 'string') {
+              let isoTimestamp = timestampToUse.trim();
+              if (isoTimestamp.includes(' ')) isoTimestamp = isoTimestamp.replace(' ', 'T');
+              if (isoTimestamp.match(/[+-]\d{2}$/)) isoTimestamp = isoTimestamp + ':00';
+              rowDate = new Date(isoTimestamp);
+            } else {
+              rowDate = new Date(timestampToUse);
+            }
+            if (isNaN(rowDate.getTime())) return false;
+            return rowDate >= start && rowDate <= end;
+          } catch (error) {
+            return false;
+          }
+        });
+      }
+      dataForDialog = tempData.filter(row => {
         const planned = row.planned;
         const actual = row.actual;
         return planned !== null && 
@@ -548,6 +710,7 @@ function Dashboard() {
       </div>
     );
   }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-3 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
@@ -556,9 +719,9 @@ function Dashboard() {
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
               Dashboard
             </h1>
-           <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
-  {getGreeting()}, {currentUserSalesPersonName}!
-</p>
+            <p className="text-sm sm:text-base md:text-lg text-slate-600 font-medium">
+              {getGreeting()}, {currentUserSalesPersonName}!
+            </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-md sm:shadow-lg border border-white/20 w-full sm:w-auto">
             <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-700">
