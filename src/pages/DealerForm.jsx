@@ -463,105 +463,91 @@ function DealerForm() {
   /**
    * Fetches master data for dealer sizes from the specified Google Sheet.
    */
-  const fetchMasterDataForDealerSizes = async () => {
-    setIsLoadingDealerSizes(true);
-    setErrorDealerSizes(null);
-    try {
-      const MASTER_SHEET_NAME = "Master";
-      const tq = encodeURIComponent("select A where A is not null");
+const fetchMasterDataForDealerSizes = async () => {
+  setIsLoadingDealerSizes(true);
+  setErrorDealerSizes(null);
+  try {
+    // Fetch from Supabase table 'dropdown' where dealer_size is not null
+    const { data, error } = await supabase
+      .from('dropdown')
+      .select('dealer_size')
+      .not('dealer_size', 'is', null)
+      .order('dealer_size');
 
-      const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID_FOR_DEALER_SIZES}/gviz/tq?tqx=out:json&tq=${tq}&sheet=${MASTER_SHEET_NAME}`;
-
-      const response = await fetch(url);
-
-      if (!response.ok)
-        throw new Error(
-          `Failed to fetch MASTER data: HTTP Status ${response.status}`
-        );
-      const text = await response.text();
-
-      const jsonStart = text.indexOf("{");
-      const jsonEnd = text.lastIndexOf("}");
-      const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
-
-      let dealerSizes = [];
-      if (data.table?.rows?.length > 0) {
-        dealerSizes = data.table.rows
-          .map((row) => {
-            const cell = row.c[0];
-            const value = cell && cell.v !== null ? String(cell.v).trim() : "";
-            return value;
-          })
-          .filter((size) => {
-            const lowerCaseSize = size.toLowerCase();
-            return (
-              size &&
-              !["dealer size", "dealersize", "size"].includes(lowerCaseSize) &&
-              !lowerCaseSize.startsWith("date(")
-            );
-          });
-      }
-
-      const uniqueDealerSizes = Array.from(new Set(dealerSizes));
-      setFetchedDealerSizes(
-        uniqueDealerSizes.length > 0 ? uniqueDealerSizes : DEFAULT_DEALER_SIZES
-      );
-    } catch (err) {
-      console.error(`Error fetching MASTER data for dealer sizes:`, err);
-      setErrorDealerSizes(`Failed to load dealer sizes: ${err.message}`);
-      setFetchedDealerSizes(DEFAULT_DEALER_SIZES);
-    } finally {
-      setIsLoadingDealerSizes(false);
+    if (error) {
+      throw new Error(`Failed to fetch MASTER data: ${error.message}`);
     }
-  };
 
-  const fetchSalesPersons = async () => {
-    setIsLoadingSalesPersons(true);
-    setErrorSalesPersons(null);
-    try {
-      const MASTER_SHEET_GID = "1319416673";
-      const tq = encodeURIComponent("select G where G is not null");
-
-      const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID_FOR_DEALER_SIZES}/gviz/tq?tqx=out:json&tq=${tq}&gid=${MASTER_SHEET_GID}`;
-
-      const response = await fetch(url);
-
-      if (!response.ok)
-        throw new Error(
-          `Failed to fetch sales persons data: HTTP Status ${response.status}`
-        );
-      const text = await response.text();
-
-      const jsonStart = text.indexOf("{");
-      const jsonEnd = text.lastIndexOf("}");
-      const data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
-
-      let salesPersons = [];
-      if (data.table?.rows?.length > 0) {
-        salesPersons = data.table.rows
-          .map((row) => {
-            const cell = row.c[0];
-            const value = cell && cell.v !== null ? String(cell.v).trim() : "";
-            return value;
-          })
-          .filter((name) => {
-            const lowerCaseName = name.toLowerCase();
-            return (
-              name &&
-              lowerCaseName !== "salesperson name" &&
-              !lowerCaseName.startsWith("date(")
-            );
-          });
-      }
-      setFetchedSalesPersons(Array.from(new Set(salesPersons)));
-    } catch (err) {
-      console.error(`Error fetching sales persons data:`, err);
-      setErrorSalesPersons(`Failed to load sales persons: ${err.message}`);
-      setFetchedSalesPersons([]);
-    } finally {
-      setIsLoadingSalesPersons(false);
+    let dealerSizes = [];
+    
+    if (data && data.length > 0) {
+      dealerSizes = data
+        .map((row) => {
+          const value = row.dealer_size ? String(row.dealer_size).trim() : "";
+          return value;
+        })
+        .filter((size) => {
+          const lowerCaseSize = size.toLowerCase();
+          return (
+            size &&
+            !["dealer size", "dealersize", "size"].includes(lowerCaseSize) &&
+            !lowerCaseSize.startsWith("date(")
+          );
+        });
     }
-  };
+
+    const uniqueDealerSizes = Array.from(new Set(dealerSizes));
+    setFetchedDealerSizes(
+      uniqueDealerSizes.length > 0 ? uniqueDealerSizes : DEFAULT_DEALER_SIZES
+    );
+    
+  } catch (err) {
+    console.error(`Error fetching MASTER data for dealer sizes:`, err);
+    setErrorDealerSizes(`Failed to load dealer sizes: ${err.message}`);
+    setFetchedDealerSizes(DEFAULT_DEALER_SIZES);
+  } finally {
+    setIsLoadingDealerSizes(false);
+  }
+};
+
+const fetchSalesPersons = async () => {
+  setIsLoadingSalesPersons(true);
+  setErrorSalesPersons(null);
+  try {
+    // Option 1: Using .not() method (as shown above)
+    const { data, error } = await supabase
+      .from('master')
+      .select('sales_person_name')
+      .not('sales_person_name', 'is', null);
+
+
+    if (error) throw error;
+
+    let salesPersons = [];
+    
+    if (data && data.length > 0) {
+      salesPersons = data
+        .map(row => row.sales_person_name?.trim() || "")
+        .filter(name => {
+          const lowerName = name.toLowerCase();
+          return name && 
+                 lowerName !== "salesperson name" &&
+                 !lowerName.startsWith("date(");
+        });
+    }
+
+    // Remove duplicates, sort alphabetically
+    const uniqueSalesPersons = [...new Set(salesPersons)].sort();
+    setFetchedSalesPersons(uniqueSalesPersons);
+    
+  } catch (err) {
+    console.error('Error fetching sales persons:', err);
+    setErrorSalesPersons(err.message);
+    setFetchedSalesPersons([]);
+  } finally {
+    setIsLoadingSalesPersons(false);
+  }
+};
 
   // useEffect hook to fetch initial data and set up auto-fill/dropdown
   useEffect(() => {
