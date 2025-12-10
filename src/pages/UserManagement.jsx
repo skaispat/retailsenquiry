@@ -57,7 +57,7 @@ const UserManagement = () => {
     user_name: "",
     sales_person_name: "", // Corrected column name
     password: "",
-    role: "user",
+    role: "User",
     position: "Area Sales Manager",
     access: []
   });
@@ -91,7 +91,7 @@ const UserManagement = () => {
       user_name: "",
       sales_person_name: "", // Corrected column name
       password: "",
-      role: "user",
+      role: "User",
       position: "Area Sales Manager",
       access: []
     });
@@ -137,7 +137,7 @@ const UserManagement = () => {
       user_name: user.user_name || "",
       sales_person_name: user.sales_person_name || "", // Corrected column name
       password: "", // Don't show existing password
-      role: user.role || "user",
+      role: user.role || "User",
       position: user.position || "Area Sales Manager",
       access: user.access ? user.access.split(',').map(p => p.trim()) : []
     });
@@ -167,10 +167,11 @@ const UserManagement = () => {
           updateData.password = formData.password;
         }
 
+        // Use the original sales_person_name as reference for update
         const { error } = await supabase
           .from('master')
           .update(updateData)
-          .eq('sales_person_name', editingUser.sales_person_name); // Corrected column name
+          .eq('sales_person_name', editingUser.sales_person_name); // Use original name for where clause
 
         if (error) throw error;
 
@@ -248,9 +249,9 @@ const UserManagement = () => {
 
   const getRoleColor = (role) => {
     switch (role) {
-      case 'admin': return 'bg-red-100 text-red-800';
-      case 'manager': return 'bg-blue-100 text-blue-800';
-      case 'user': return 'bg-green-100 text-green-800';
+      case 'Admin': return 'bg-red-100 text-red-800';
+      case 'Manager': return 'bg-blue-100 text-blue-800';
+      case 'User': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -363,9 +364,9 @@ const UserManagement = () => {
                 suffixIcon={<Filter className="w-4 h-4" />}
               >
                 <Option value="all">All Roles</Option>
-                <Option value="admin">Admin</Option>
-                <Option value="manager">Manager</Option>
-                <Option value="user">User</Option>
+                <Option value="Admin">Admin</Option>
+                <Option value="Manager">Manager</Option>
+                <Option value="User">User</Option>
               </Select>
             </div>
 
@@ -576,7 +577,6 @@ const UserManagement = () => {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
-                disabled={editingUser}
               />
             </div>
 
