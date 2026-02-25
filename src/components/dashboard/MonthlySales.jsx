@@ -11,6 +11,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 function MonthlySales() {
   const [isLoading, setIsLoading] = useState(true);
@@ -210,24 +211,31 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Helper function to parse and format dates from various Google Sheets formats
 const parseDate = (dateValue) => {
   if (!dateValue) return null;
   try {
     let date;
-    if (typeof dateValue === 'string' && dateValue.startsWith('Date(')) {
-      const match = dateValue.match(/Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,(\d{1,2}),(\d{1,2}),(\d{1,2}))?\)/);
+    if (typeof dateValue === "string" && dateValue.startsWith("Date(")) {
+      const match = dateValue.match(
+        /Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,(\d{1,2}),(\d{1,2}),(\d{1,2}))?\)/,
+      );
       if (match) {
-        date = new Date(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
+        date = new Date(
+          parseInt(match[1]),
+          parseInt(match[2]),
+          parseInt(match[3]),
+        );
       }
     } else if (dateValue instanceof Date) {
       date = dateValue;
-    } else if (typeof dateValue === 'number' && dateValue > 0) {
+    } else if (typeof dateValue === "number" && dateValue > 0) {
       // Excel/Google Sheets numeric date format
       const excelEpoch = new Date(1899, 11, 30);
       date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000);
-    } else if (typeof dateValue === 'string') {
+    } else if (typeof dateValue === "string") {
       date = new Date(dateValue);
       if (isNaN(date.getTime())) {
         // Try DD/MM/YYYY
@@ -238,22 +246,38 @@ const parseDate = (dateValue) => {
           // Try MM/DD/YYYY as fallback
           const mmddyyyy = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
           if (mmddyyyy) {
-            date = new Date(mmddyyyy[3], parseInt(mmddyyyy[1]) - 1, mmddyyyy[2]);
+            date = new Date(
+              mmddyyyy[3],
+              parseInt(mmddyyyy[1]) - 1,
+              mmddyyyy[2],
+            );
           }
         }
       }
     }
-    return (!date || isNaN(date.getTime())) ? null : date;
+    return !date || isNaN(date.getTime()) ? null : date;
   } catch (error) {
-    console.error('Error parsing date:', error, 'Original value:', dateValue);
+    console.error("Error parsing date:", error, "Original value:", dateValue);
     return null;
   }
 };
 
-
 function MonthlySales({ filteredData, FMS_COLUMNS_INFO }) {
   const [salesData, setSalesData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const handlePrevMonth = () => {
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1),
+    );
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1),
+    );
+  };
 
   useEffect(() => {
     if (!filteredData || filteredData.length === 0) {
@@ -264,19 +288,26 @@ function MonthlySales({ filteredData, FMS_COLUMNS_INFO }) {
 
     setIsLoading(true);
 
-    const monthNames = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const monthlySalesMap = new Map();
+    const dailySalesMap = new Map();
+    for (let i = 1; i <= daysInMonth; i++) {
+      dailySalesMap.set(i, 0);
+    }
 
-    const salesValueColProperty = Object.values(FMS_COLUMNS_INFO).find(info => info.label === "Value of Order")?.property || "col25";
-    const timestampColProperty = Object.values(FMS_COLUMNS_INFO).find(info => info.label === "Timestamp")?.property || "col0";
+    const salesValueColProperty =
+      Object.values(FMS_COLUMNS_INFO).find(
+        (info) => info.label === "Value of Order",
+      )?.property || "col25";
+    const timestampColProperty =
+      Object.values(FMS_COLUMNS_INFO).find((info) => info.label === "Timestamp")
+        ?.property || "col0";
 
     filteredData.forEach((row) => {
-      const rawSales = row[salesValueColProperty]; 
-      const rawTimestamp = row[timestampColProperty]; 
+      const rawSales = row[salesValueColProperty];
+      const rawTimestamp = row[timestampColProperty];
 
       if (!rawSales || !rawTimestamp) return;
 
@@ -286,37 +317,26 @@ function MonthlySales({ filteredData, FMS_COLUMNS_INFO }) {
       const date = parseDate(rawTimestamp); // Use the new parseDate helper
       if (!date) return;
 
-      const monthKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-
-      monthlySalesMap.set(
-        monthKey,
-        (monthlySalesMap.get(monthKey) || 0) + cleanedSales
-      );
+      if (date.getFullYear() === year && date.getMonth() === month) {
+        const day = date.getDate();
+        dailySalesMap.set(day, (dailySalesMap.get(day) || 0) + cleanedSales);
+      }
     });
 
-    // Sort data chronologically and limit to the last 12 months
-    const dynamicSalesData = Array.from(monthlySalesMap.entries())
-      .map(([month, sales]) => {
-        const [monthName, year] = month.split(" ");
-        const monthIndex = monthNames.indexOf(monthName);
-        const dateObj = new Date(parseInt(year), monthIndex); 
-        return {
-          name: month,
-          sales: Math.round(sales),
-          dateSort: dateObj,
-        };
-      })
-      .sort((a, b) => a.dateSort.getTime() - b.dateSort.getTime()) 
-      .slice(-12) 
-      .map(({ name, sales }) => ({ name, sales }));
+    const dynamicSalesData = Array.from(dailySalesMap.entries()).map(
+      ([day, sales]) => ({
+        name: `${day}`,
+        sales: Math.round(sales),
+      }),
+    );
 
     setSalesData(
       dynamicSalesData.length
         ? dynamicSalesData
-        : [{ name: "No Valid Data", sales: 0 }]
+        : [{ name: "No Valid Data", sales: 0 }],
     );
     setIsLoading(false);
-  }, [filteredData, FMS_COLUMNS_INFO]); 
+  }, [filteredData, FMS_COLUMNS_INFO, currentDate]);
 
   if (isLoading) {
     return (
@@ -328,11 +348,35 @@ function MonthlySales({ filteredData, FMS_COLUMNS_INFO }) {
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden w-full max-w-4xl mx-auto">
-      <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-6 sm:px-8 py-6">
-        <h3 className="md:text-2xl font-bold text-white mb-2">Monthly Sales</h3>
-        <p className="text-blue-50 md:text-lg">
-          Track your sales performance over time
-        </p>
+      <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-6 sm:px-8 py-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h3 className="md:text-2xl font-bold text-white mb-2">
+            Monthly Sales
+          </h3>
+          <p className="text-blue-50 md:text-lg">
+            Track your daily sales performance
+          </p>
+        </div>
+        <div className="flex items-center space-x-3 bg-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm">
+          <button
+            onClick={handlePrevMonth}
+            className="text-white hover:text-blue-100 transition-colors p-1 rounded-md hover:bg-white/10 active:bg-white/20"
+          >
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+          </button>
+          <span className="text-white font-semibold text-base sm:text-lg min-w-[7rem] text-center">
+            {currentDate.toLocaleDateString("en-US", {
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+          <button
+            onClick={handleNextMonth}
+            className="text-white hover:text-blue-100 transition-colors p-1 rounded-md hover:bg-white/10 active:bg-white/20"
+          >
+            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+          </button>
+        </div>
       </div>
       <div className="w-full px-2 sm:px-4 md:px-6 py-4">
         <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm sm:shadow-md p-3 sm:p-4 md:p-6">
@@ -375,7 +419,6 @@ function MonthlySales({ filteredData, FMS_COLUMNS_INFO }) {
                   dataKey="sales"
                   fill="url(#salesGradient)"
                   radius={[4, 4, 0, 0]}
-                  barSize={window.innerWidth < 640 ? 20 : 30}
                 />
                 <defs>
                   <linearGradient
