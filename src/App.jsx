@@ -54,9 +54,9 @@ const App = () => {
         setUserType(parsedUser.role);
         setTabs(parsedUser.tabs || []);
       } else {
-        // For regular users, check if they are allowed to login today
-        checkLoginAccess(parsedUser.username).then((canLogin) => {
-          if (canLogin) {
+        // # ========== ONCE PER DAY USER'S LOGIN RESTRICTION LOGIC ===== # Lines 58-79)
+        // checkLoginAccess(parsedUser.username).then((canLogin) => {
+        //   if (canLogin) {
             setIsAuthenticated(true);
             setCurrentUser(parsedUser);
             setUserType(parsedUser.role);
@@ -71,12 +71,12 @@ const App = () => {
               // If no stored first login time, setup auto logout from now
               setupAutoLogout();
             }
-          } else {
-            // Clear storage if access denied
-            localStorage.clear();
-            displayNotification("Your access is denied for today. Please request access from admin.", "error");
-          }
-        });
+        //   } else {
+        //     // Clear storage if access denied
+        //     localStorage.clear();
+        //     displayNotification("Your access is denied for today. Please request access from admin.", "error");
+        //   }
+        // });
       }
     }
   }, []);
@@ -340,14 +340,14 @@ const App = () => {
       if (data) {
         const userIsAdmin = isAdminUser(data.role);
         
-        // For regular users, check if they can login today
-        if (!userIsAdmin) {
-          const canLogin = await checkLoginAccess(username);
-          if (!canLogin) {
-            displayNotification("Your access is denied for today. Please request access from admin.", "error");
-            return { success: false, accessDenied: true };
-          }
-        }
+        // # ===== LOGIN ONCE PER DAY USER'S restriction during login (Lines 344-350)
+        // if (!userIsAdmin) {
+        //   const canLogin = await checkLoginAccess(username);
+        //   if (!canLogin) {
+        //     displayNotification("Your access is denied for today. Please request access from admin.", "error");
+        //     return { success: false, accessDenied: true };
+        //   }
+        // }
 
         const userInfo = {
           username: data.user_name,
