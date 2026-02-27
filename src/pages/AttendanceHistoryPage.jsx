@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import supabase from '../SupaabseClient';
-import { MapPin, Loader2, Calendar, User, Navigation, Map, Download } from "lucide-react";
+import { MapPin, Loader2, Calendar, User, Navigation, Map, Download, Filter } from "lucide-react";
 import jsPDF from 'jspdf';
 
 const AttendanceHistoryPage = () => {
@@ -14,7 +14,10 @@ const AttendanceHistoryPage = () => {
   
   // Filter states
   const [selectedUser, setSelectedUser] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
+
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
 
   useEffect(() => {
     fetchAttendanceData();
@@ -23,7 +26,7 @@ const AttendanceHistoryPage = () => {
 
   useEffect(() => {
     filterData();
-  }, [attendanceData, selectedUser, selectedDate]);
+  }, [attendanceData, selectedUser]);
 
   const fetchAttendanceData = async () => {
     try {
@@ -69,34 +72,162 @@ const filterData = () => {
     filtered = filtered.filter(item => item.sales_person_name === selectedUser);
   }
 
-  if (selectedDate) {
-    filtered = filtered.filter(item => {
-      if (!item.date_and_time) return false;
-      
-      try {
-        // Create date objects and compare only the date parts
-        const recordDate = new Date(item.date_and_time);
-        const filterDate = new Date(selectedDate);
-        
-        // Compare year, month, and day only
-        return (
-          recordDate.getFullYear() === filterDate.getFullYear() &&
-          recordDate.getMonth() === filterDate.getMonth() &&
-          recordDate.getDate() === filterDate.getDate()
-        );
-      } catch (error) {
-        console.error('Error filtering by date:', error);
-        return false;
-      }
-    });
-  }
-
   setFilteredData(filtered);
 };
 
   const clearFilters = () => {
     setSelectedUser('');
-    setSelectedDate('');
+    setExportStartDate('');
+    setExportEndDate('');
+  };
+
+  // Export by date range — queries Supabase directly
+  const exportByDateRange = async () => {
+    try {
+      setExportLoading(true);
+
+      let query = supabase
+        .from('attendance')
+        .select('*')
+        .order('date_and_time', { ascending: false });
+
+      if (selectedUser) {
+        query = query.eq('sales_person_name', selectedUser);
+      }
+      if (exportStartDate) {
+        query = query.gte('date_and_time', exportStartDate + 'T00:00:00');
+      }
+      if (exportEndDate) {
+        query = query.lte('date_and_time', exportEndDate + 'T23:59:59');
+      }
+
+      const { data, error: fetchError } = await query;
+
+      if (fetchError) throw fetchError;
+
+      if (!data || data.length === 0) {
+        alert('No records found for the selected date range.');
+        return;
+      }
+
+      // Generate PDF using the same layout as exportToPDF
+      const doc = new jsPDF('landscape');
+
+      doc.setFontSize(16);
+      doc.setTextColor(40, 40, 40);
+      doc.text('ATTENDANCE HISTORY REPORT', 148, 15, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      doc.text(`Generated: ${currentDate}`, 148, 22, { align: 'center' });
+
+      let rangeLabel = 'All Dates';
+      if (exportStartDate && exportEndDate) {
+        rangeLabel = `From: ${exportStartDate}  To: ${exportEndDate}`;
+      } else if (exportStartDate) {
+        rangeLabel = `From: ${exportStartDate}`;
+      } else if (exportEndDate) {
+        rangeLabel = `Up to: ${exportEndDate}`;
+      }
+      doc.text(`Date Range: ${rangeLabel}`, 148, 28, { align: 'center' });
+      doc.text(`User: ${selectedUser || 'All Users'}  |  Total Records: ${data.length}`, 148, 34, { align: 'center' });
+
+      const columns = [
+        { header: 'SALES PERSON', key: 'sales_person_name', width: 28 },
+        { header: 'DATE & TIME', key: 'date_and_time', width: 32 },
+        { header: 'END DATE', key: 'end_date', width: 28 },
+        { header: 'STATUS', key: 'status', width: 18 },
+        { header: 'REASON', key: 'reason', width: 25 },
+        { header: 'LATITUDE', key: 'latitude', width: 22 },
+        { header: 'LONGITUDE', key: 'longitude', width: 22 },
+        { header: 'MAP LINK', key: 'map_link', width: 25 },
+        { header: 'ADDRESS', key: 'address', width: 40 }
+      ];
+
+      const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+      const pageWidth = doc.internal.pageSize.width;
+      const margin = (pageWidth - totalTableWidth) / 2;
+      let yPosition = 45;
+      const pageHeight = doc.internal.pageSize.height;
+      const rowHeight = 8;
+
+      // Draw header
+      const drawHeader = (yPos) => {
+        doc.setFillColor(59, 130, 246);
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        let xPos = margin;
+        columns.forEach((column) => {
+          doc.rect(xPos, yPos, column.width, rowHeight, 'F');
+          const tw = doc.getTextWidth(column.header);
+          doc.text(column.header, xPos + (column.width - tw) / 2, yPos + 5);
+          xPos += column.width;
+        });
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(0, 0, 0);
+      };
+
+      drawHeader(yPosition);
+      yPosition += rowHeight;
+
+      data.forEach((record, index) => {
+        if (yPosition > pageHeight - 20) {
+          doc.addPage('landscape');
+          yPosition = 15;
+          drawHeader(yPosition);
+          yPosition += rowHeight;
+        }
+
+        if (index % 2 === 0) {
+          doc.setFillColor(240, 240, 240);
+          let xPos = margin;
+          columns.forEach(col => {
+            doc.rect(xPos, yPosition, col.width, rowHeight, 'F');
+            xPos += col.width;
+          });
+        }
+
+        let xPos = margin;
+        columns.forEach((column) => {
+          let cellValue = record[column.key] || 'N/A';
+          if (column.key === 'date_and_time' || column.key === 'end_date') {
+            cellValue = formatDateTimeForPDF(cellValue);
+          }
+          if (column.key === 'map_link' && cellValue !== 'N/A') {
+            cellValue = 'View Map';
+          }
+          const lines = doc.splitTextToSize(cellValue.toString(), column.width - 4);
+          doc.text(lines, xPos + 2, yPosition + 5);
+          xPos += column.width;
+        });
+
+        yPosition += rowHeight;
+      });
+
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+      }
+
+      const fileName = `Attendance_Filtered_${exportStartDate || 'start'}_to_${exportEndDate || 'end'}.pdf`;
+      doc.save(fileName);
+
+    } catch (err) {
+      console.error('Export by date range error:', err);
+      alert('Failed to export. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   // Export PDF function with proper header visibility
@@ -372,29 +503,13 @@ const formatDateTime = (timestamp) => {
                   View and filter attendance records
                 </p>
               </div>
-              <div className="mt-4 md:mt-0 flex flex-wrap gap-3">
-                <button
-                  onClick={exportToPDF}
-                  disabled={filteredData.length === 0}
-                  className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors border border-white/30 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Download className="w-4 h-4" />
-                  Export PDF
-                </button>
-                {/* <button
-                  onClick={fetchAttendanceData}
-                  className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors border border-white/30 flex items-center gap-2"
-                >
-                  <Loader2 className="w-4 h-4" />
-                  Refresh Data
-                </button> */}
-              </div>
+              
             </div>
           </div>
 
           {/* Filters */}
           <div className="bg-gray-50 p-6 border-b border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
               {/* User Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
@@ -415,28 +530,58 @@ const formatDateTime = (timestamp) => {
                 </select>
               </div>
 
-              {/* Date Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Filter by Date
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                />
-              </div>
-
               {/* Clear Filters */}
-              <div className="flex items-end">
+              <div>
                 <button
                   onClick={clearFilters}
                   className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
                 >
-                  <span>Clear Filters</span>
+                  <span>Clear All Filters</span>
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Export by Date Range */}
+          <div className="bg-white p-6 border-b border-gray-200">
+            <div className="flex items-center gap-2 mb-4">
+              <Filter className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-lg font-semibold text-gray-800">Export by Date Range</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                <input
+                  type="date"
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                <input
+                  type="date"
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                />
+              </div>
+              <div>
+                <button
+                  onClick={exportByDateRange}
+                  disabled={exportLoading}
+                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {exportLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Exporting...</>
+                  ) : (
+                    <><Download className="w-4 h-4" /> Export Filtered PDF</>
+                  )}
+                </button>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 italic">To export all the records, leave both of the date fields empty</p>
               </div>
             </div>
           </div>
