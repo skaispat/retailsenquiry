@@ -105,11 +105,13 @@ const Tracker = () => {
    */
   const fetchFMSDataFromSupabase = async () => {
     try {
-      console.log("🔄 Fetching FMS data from Supabase...");
+
       
       let query = supabase
         .from('FMS')
         .select('*')
+        .not('planned', 'is', null)
+        .is('actual', null)
         .order('timestamp', { ascending: false });
 
       if (!isAdmin) {
@@ -122,7 +124,7 @@ const Tracker = () => {
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      console.log("✅ FMS data fetched from Supabase:", data);
+
       return data || [];
     } catch (error) {
       console.error("❌ Error fetching FMS data from Supabase:", error);
@@ -135,7 +137,7 @@ const Tracker = () => {
    */
   const fetchMasterDataFromSupabase = async () => {
     try {
-      console.log("🔄 Fetching master data from Supabase...");
+
       
       const { data, error } = await supabase
         .from('dropdown')
@@ -145,7 +147,7 @@ const Tracker = () => {
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      console.log("✅ Master data fetched from Supabase:", data);
+
       
       const transformedData = data.map(item => ({
         col1: item.status || "",
@@ -214,7 +216,7 @@ const Tracker = () => {
       setError(null);
 
       if (!isAuthenticated || !currentUser) {
-        console.log("Not authenticated. Skipping data fetch.");
+
         setIsLoading(false);
         return;
       }
@@ -225,7 +227,7 @@ const Tracker = () => {
       ]);
 
       const processedFMSData = mapSupabaseToLegacyFormat(fmsData);
-      console.log("Processed FMS Data:", processedFMSData);
+
 
       let filteredFMSItems = processedFMSData.filter((item) => {
         const colO = item.col14;
@@ -255,7 +257,7 @@ const Tracker = () => {
         });
       }
 
-      console.log("Final Filtered FMS Items:", filteredFMSItems);
+
       setIndents(filteredFMSItems);
 
       const masterItems = processMasterRows(masterData);
@@ -391,7 +393,7 @@ const Tracker = () => {
   };
 
   const refreshData = () => {
-    console.log("🔄 Refreshing Tracker data...");
+
     fetchTrackerData();
   };
 
@@ -549,7 +551,6 @@ const Tracker = () => {
                                 <button
                                   className="bg-gradient-to-r from-green-100 to-teal-100 text-green-700 border border-green-200 hover:from-green-200 hover:to-teal-200 font-medium py-2 px-4 rounded-lg text-sm flex items-center gap-2 transition-all duration-200"
                                   onClick={() => {
-                                    console.log("✏️ Selected item for update:", item);
                                     setSelectedIndent(item);
                                     setIsDialogOpen(true);
                                   }}
@@ -606,7 +607,7 @@ const Tracker = () => {
                         <div key={item._id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                           {/* Card Header - Always Visible */}
                           <div 
-                            className="p-4 border-b border-slate-100 cursor-pointer"
+                            className="p-3 sm:p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50/50 transition-colors"
                             onClick={() => toggleCardExpansion(item._id)}
                           >
                             <div className="flex justify-between items-start">
@@ -671,7 +672,6 @@ const Tracker = () => {
                                 <button
                                   className="w-full bg-gradient-to-r from-green-100 to-teal-100 text-green-700 border border-green-200 hover:from-green-200 hover:to-teal-200 font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 transition-all duration-200"
                                   onClick={() => {
-                                    console.log("✏️ Selected item for update:", item);
                                     setSelectedIndent(item);
                                     setIsDialogOpen(true);
                                   }}
@@ -694,7 +694,7 @@ const Tracker = () => {
       <TrackerDialog
         isOpen={isDialogOpen}
         onClose={() => {
-          console.log("Attempting to close dialog from Tracker.");
+
           setIsDialogOpen(false);
           fetchTrackerData();
         }}

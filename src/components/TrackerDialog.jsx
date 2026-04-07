@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useContext } from "react";
+import { RefreshCw } from "lucide-react";
 import { AuthContext } from "../App";
 import supabase from "../SupaabseClient";
 
@@ -26,6 +27,7 @@ export default function TrackerDialog({
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("success");
   const [modalMessage, setModalMessage] = useState("");
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // State for sales person names from master table
   const [salesPersonNames, setSalesPersonNames] = useState([]);
@@ -129,10 +131,6 @@ export default function TrackerDialog({
           error: null,
           isLoading: false
         });
-        console.log("📍 Location captured:", {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude
-        });
       },
       (error) => {
         let errorMessage = "Unable to retrieve your location.";
@@ -158,12 +156,11 @@ export default function TrackerDialog({
           error: errorMessage,
           isLoading: false
         });
-        console.error("❌ Location error:", errorMessage);
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
+        timeout: 15000, 
+        maximumAge: 120000 
       }
     );
   };
@@ -174,7 +171,6 @@ export default function TrackerDialog({
       if (!isOpen) return;
       
       try {
-        console.log("🔄 Fetching sales person names from master table...");
         
         const { data, error } = await supabase
           .from('master')
@@ -184,11 +180,8 @@ export default function TrackerDialog({
           .order('sales_person_name');
 
         if (error) {
-          console.error('Error fetching sales person names:', error);
           throw error;
         }
-
-        console.log("✅ Sales person names fetched:", data);
 
         // Extract unique names and filter out invalid values
         const uniqueNames = [...new Set(data
@@ -200,11 +193,9 @@ export default function TrackerDialog({
           )
         )];
 
-        console.log("✨ Unique sales person names:", uniqueNames);
         setSalesPersonNames(uniqueNames);
 
       } catch (error) {
-        console.error('Failed to fetch sales person names:', error);
         setSalesPersonNames([]);
       }
     };
@@ -463,10 +454,14 @@ export default function TrackerDialog({
 
     // Check if location is available
     if (!location.latitude || !location.longitude) {
-      showToast("Please enable location services to record interaction.", "error");
+      setShowConfirmModal(true);
       return;
     }
 
+    executeSubmission();
+  };
+
+  const executeSubmission = async () => {
     setErrors({});
     setIsSubmitting(true);
 
@@ -520,12 +515,6 @@ export default function TrackerDialog({
         latitude: location.latitude,
       };
 
-      // console.log("📍 Inserting tracking data with location:", {
-      //   ...insertData,
-      //   latitude: location.latitude,
-      //   longitude: location.longitude
-      // });
-
       // Insert into tracking_history table
       const { data: trackingData, error: trackingError } = await supabase
         .from("tracking_history")
@@ -556,8 +545,6 @@ export default function TrackerDialog({
         latitude: location.latitude,
       };
 
-      console.log("📍 Updating FMS table with location data:", fmsUpdateData);
-
       // Update FMS table using update instead of upsert
       const { data: fmsData, error: fmsError } = await supabase
         .from("FMS")
@@ -567,7 +554,7 @@ export default function TrackerDialog({
       if (fmsError) throw fmsError;
 
       showToast(
-        `Tracking data for ${dealerCode} recorded successfully with location!`,
+        `Tracking data for ${dealerCode} recorded successfully!`,
         "success"
       );
 
@@ -575,7 +562,6 @@ export default function TrackerDialog({
         onClose();
       }, 1000);
     } catch (error) {
-      console.error("Submission error:", error);
       showToast(
         `Error recording data: ${error.message || "Unknown error"}`,
         "error"
@@ -628,46 +614,45 @@ export default function TrackerDialog({
               )}
               
               {/* Location Status */}
-              {/* <div className="mt-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-700">
+              <div className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-700">
                     Location Status:
                   </span>
                   {location.isLoading ? (
-                    <span className="text-yellow-600 text-sm flex items-center gap-1">
-                      <div className="w-3 h-3 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
-                      Getting location...
+                    <span className="text-amber-600 text-sm flex items-center gap-2 font-medium">
+                      <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                      Fetching your coordinates...
                     </span>
                   ) : location.error ? (
-                    <span className="text-red-600 text-sm flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <span className="text-red-600 text-sm flex items-center gap-2 font-medium">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                       </svg>
                       {location.error}
                     </span>
                   ) : location.latitude && location.longitude ? (
-                    <span className="text-green-600 text-sm flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <span className="text-emerald-600 text-sm flex items-center gap-2 font-medium">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      Location captured ({location.latitude.toFixed(6)}, {location.longitude.toFixed(6)})
+                      Captured ({location.latitude.toFixed(6)}, {location.longitude.toFixed(6)})
                     </span>
                   ) : (
-                    <span className="text-gray-500 text-sm">Location not available</span>
+                    <span className="text-slate-500 text-sm font-medium italic">Pending...</span>
                   )}
                 </div>
-                {location.error && (
+                {(location.error || (!location.isLoading && !location.latitude)) && (
                   <button
+                    type="button"
                     onClick={getCurrentLocation}
-                    className="mt-1 text-blue-600 text-sm hover:text-blue-800 flex items-center gap-1"
+                    className="mt-2 text-indigo-600 text-sm hover:text-indigo-800 flex items-center gap-1.5 font-bold underline transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Retry location
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Retry fetching location
                   </button>
                 )}
-              </div> */}
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -959,13 +944,27 @@ export default function TrackerDialog({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isSubmitting || !location.latitude || !location.longitude}
-                >
-                  {isSubmitting ? "Recording..." : "Record Interaction"}
-                </button>
+                <div className="flex flex-col items-end gap-2">
+                  <button
+                    type="submit"
+                    className="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Recording...
+                      </span>
+                    ) : (
+                      "Record Interaction"
+                    )}
+                  </button>
+                  {(!location.latitude || !location.longitude) && !isSubmitting && !location.isLoading && (
+                    <p className="text-xs text-amber-600 font-medium italic">
+                      * Location not available. You can still submit.
+                    </p>
+                  )}
+                </div>
               </div>
             </form>
           </div>
@@ -1039,6 +1038,59 @@ export default function TrackerDialog({
               >
                 Ok
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[70] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
+            <div className="p-8 text-center">
+              <div className="mx-auto mb-6 w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center">
+                <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="3"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    ></path>
+                  </svg>
+                </div>
+              </div>
+
+              <h2 className="text-2xl font-bold mb-4 text-slate-800">
+                Location Missing
+              </h2>
+
+              <p className="text-slate-600 text-lg mb-8 leading-relaxed">
+                Location fetching failed or is not available. Do you want to record the interaction anyway?
+              </p>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    executeSubmission();
+                  }}
+                  className="w-full px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Yes, Submit Anyway
+                </button>
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="w-full px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all duration-200"
+                >
+                  No, Try Again
+                </button>
+              </div>
             </div>
           </div>
         </div>

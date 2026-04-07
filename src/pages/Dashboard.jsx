@@ -271,7 +271,7 @@ function Dashboard() {
       setError(null);
 
       if (!isAuthenticated || !currentUser) {
-        console.log("DEBUG: Not authenticated or currentUser missing.");
+        // console.log("DEBUG: Not authenticated or currentUser missing.");
         setIsLoading(false);
         setError("Please log in to view the dashboard.");
         return;
@@ -421,10 +421,10 @@ function Dashboard() {
       );
     }
 
-    console.log(
-      "🔍 Data after salesperson filter for counts:",
-      dataForCounts.length,
-    );
+    // console.log(
+    //   "🔍 Data after salesperson filter for counts:",
+    //   dataForCounts.length,
+    // );
 
     // 2. TOTAL COUNT: Filter by timestamp when dates are selected
     let totalFilteredData = [...dataForCounts];
@@ -460,17 +460,17 @@ function Dashboard() {
     }
 
     setTotalCount(totalFilteredData.length);
-    console.log(
-      "📊 Total records count (timestamp filtered):",
-      totalFilteredData.length,
-    );
+    // console.log(
+    //   "📊 Total records count (timestamp filtered):",
+    //   totalFilteredData.length,
+    // );
 
     // 3. TOTAL ORDERS COUNT: Use timestamp-filtered data
     const ordersCount = totalFilteredData.filter((row) => {
       return row.value_of_order && String(row.value_of_order).trim() !== "";
     }).length;
     setTotalOrdersCount(ordersCount);
-    console.log("📊 Total orders count:", ordersCount);
+    // console.log("📊 Total orders count:", ordersCount);
 
     // 4. PENDING ENQUIRIES COUNT: Use timestamp-filtered data
     const pendingCount = totalFilteredData.filter((row) => {
@@ -484,10 +484,10 @@ function Dashboard() {
       );
     }).length;
     setPendingEnquiriesCount(pendingCount);
-    console.log("📊 Pending enquiries count:", pendingCount);
+    // console.log("📊 Pending enquiries count:", pendingCount);
 
     // 5. ACTIVE DEALERS COUNT: SPECIAL LOGIC - ONLY when stage is "Order Received"
-    console.log("🎯 ========== ACTIVE DEALERS CALCULATION ==========");
+    // console.log("🎯 ========== ACTIVE DEALERS CALCULATION ==========");
 
     const activeDealers = new Set();
     const activeDealerDetails = [];
@@ -495,10 +495,10 @@ function Dashboard() {
     // Start with dataForCounts (already filtered by salesperson if needed)
     let dataForActiveDealers = [...dataForCounts];
 
-    console.log(
-      "📊 Total records to check for active dealers:",
-      dataForActiveDealers.length,
-    );
+    // console.log(
+    //   "📊 Total records to check for active dealers:",
+    //   dataForActiveDealers.length,
+    // );
 
     // Step 1: Filter by stage = "Order Received"
     const orderReceivedRecords = dataForActiveDealers.filter((row) => {
@@ -507,23 +507,23 @@ function Dashboard() {
       return normalizedStage === "order received";
     });
 
-    console.log(
-      "📊 Records with stage = 'Order Received':",
-      orderReceivedRecords.length,
-    );
+    // console.log(
+    //   "📊 Records with stage = 'Order Received':",
+    //   orderReceivedRecords.length,
+    // );
 
     // Debug: Show first few order received records
     if (orderReceivedRecords.length > 0) {
-      console.log("🔍 Sample of 'Order Received' records (first 5):");
+      // console.log("🔍 Sample of 'Order Received' records (first 5):");
       orderReceivedRecords.slice(0, 5).forEach((row, index) => {
-        console.log(`Record ${index + 1}:`, {
-          dealer_code: row.dealer_code,
-          dealer_name: row.dealer_name,
-          stage: row.stage,
-          status: row.status,
-          last_date_of_call: row.last_date_of_call,
-          sales_person_name: row.sales_person_name,
-        });
+        // console.log(`Record ${index + 1}:`, {
+        //   dealer_code: row.dealer_code,
+        //   dealer_name: row.dealer_name,
+        //   stage: row.stage,
+        //   status: row.status,
+        //   last_date_of_call: row.last_date_of_call,
+        //   sales_person_name: row.sales_person_name,
+        // });
       });
     }
 
@@ -536,45 +536,45 @@ function Dashboard() {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
-      console.log("🕐 Filtering by last_date_of_call date range:", {
-        start: start.toISOString(),
-        end: end.toISOString(),
-        formattedStart: start.toLocaleDateString("en-GB"),
-        formattedEnd: end.toLocaleDateString("en-GB"),
-      });
+      // console.log("🕐 Filtering by last_date_of_call date range:", {
+      //   start: start.toISOString(),
+      //   end: end.toISOString(),
+      //   formattedStart: start.toLocaleDateString("en-GB"),
+      //   formattedEnd: end.toLocaleDateString("en-GB"),
+      // });
 
       filteredOrderReceivedRecords = filteredOrderReceivedRecords.filter(
         (row) => {
           const lastCallDate = row.last_date_of_call;
           if (!lastCallDate) {
-            console.log(
-              "❌ No last_date_of_call for dealer:",
-              row.dealer_code,
-              row.dealer_name,
-            );
+            // console.log(
+            //   "❌ No last_date_of_call for dealer:",
+            //   row.dealer_code,
+            //   row.dealer_name,
+            // );
             return false;
           }
 
           try {
             const parsedDate = parseSupabaseDate(lastCallDate);
             if (!parsedDate || isNaN(parsedDate.getTime())) {
-              console.log(
-                "❌ Could not parse date:",
-                lastCallDate,
-                "for dealer:",
-                row.dealer_code,
-              );
+              // console.log(
+              //   "❌ Could not parse date:",
+              //   lastCallDate,
+              //   "for dealer:",
+              //   row.dealer_code,
+              // );
               return false;
             }
 
             const isInRange = parsedDate >= start && parsedDate <= end;
 
             if (isInRange) {
-              console.log("✅ Date in range:", {
-                dealer_code: row.dealer_code,
-                last_date_of_call: lastCallDate,
-                parsedDate: parsedDate.toISOString(),
-              });
+              // console.log("✅ Date in range:", {
+              //   dealer_code: row.dealer_code,
+              //   last_date_of_call: lastCallDate,
+              //   parsedDate: parsedDate.toISOString(),
+              // });
             }
 
             return isInRange;
@@ -585,10 +585,10 @@ function Dashboard() {
         },
       );
 
-      console.log(
-        "📊 Records after last_date_of_call date filtering:",
-        filteredOrderReceivedRecords.length,
-      );
+      // console.log(
+      //   "📊 Records after last_date_of_call date filtering:",
+      //   filteredOrderReceivedRecords.length,
+      // );
     }
 
     // Step 3: Count unique dealers
@@ -609,36 +609,36 @@ function Dashboard() {
           sales_person_name: row.sales_person_name,
         });
 
-        console.log("✅ ADDED Active Dealer:", {
-          dealer_code: dealerCode,
-          dealer_name: row.dealer_name,
-          stage: row.stage,
-          last_date_of_call: row.last_date_of_call,
-          sales_person_name: row.sales_person_name,
-        });
+        // console.log("✅ ADDED Active Dealer:", {
+        //   dealer_code: dealerCode,
+        //   dealer_name: row.dealer_name,
+        //   stage: row.stage,
+        //   last_date_of_call: row.last_date_of_call,
+        //   sales_person_name: row.sales_person_name,
+        // });
       }
     });
 
     const activeDealersCount = activeDealers.size;
 
-    console.log("\n🎯 ========== ACTIVE DEALERS SUMMARY ==========");
-    console.log("📊 Unique active dealers found:", activeDealersCount);
-    console.log(
-      "📊 Active dealer details (first 10):",
-      activeDealerDetails.slice(0, 10),
-    );
-    console.log("📊 Active dealer codes:", Array.from(activeDealers));
+    // console.log("\n🎯 ========== ACTIVE DEALERS SUMMARY ==========");
+    // console.log("📊 Unique active dealers found:", activeDealersCount);
+    // console.log(
+    //   "📊 Active dealer details (first 10):",
+    //   activeDealerDetails.slice(0, 10),
+    // );
+    // console.log("📊 Active dealer codes:", Array.from(activeDealers));
 
     setActiveDealersCount(activeDealersCount);
 
-    console.log("\n📈 ========== FINAL COUNTS SUMMARY ==========");
-    console.log("📊 Total Records:", totalFilteredData.length);
-    console.log("📊 Active Dealers:", activeDealersCount);
-    console.log("📊 Total Orders:", ordersCount);
-    console.log("📊 Pending Enquiries:", pendingCount);
-    console.log(
-      "📝 Active dealers: stage='Order Received' + last_date_of_call date filter",
-    );
+    // console.log("\n📈 ========== FINAL COUNTS SUMMARY ==========");
+    // console.log("📊 Total Records:", totalFilteredData.length);
+    // console.log("📊 Active Dealers:", activeDealersCount);
+    // console.log("📊 Total Orders:", ordersCount);
+    // console.log("📊 Pending Enquiries:", pendingCount);
+    // console.log(
+    //   "📝 Active dealers: stage='Order Received' + last_date_of_call date filter",
+    // );
   }, [allFMSData, startDate, endDate, isAdmin, selectedSalesperson]);
 
   const handleCardClick = (kpiType) => {
@@ -708,11 +708,11 @@ function Dashboard() {
         return normalizedStage === "order received";
       });
 
-      console.log(
-        "📋 Active dealers dialog: Found",
-        tempData.length,
-        "records with 'Order Received' stage",
-      );
+      // console.log(
+      //   "📋 Active dealers dialog: Found",
+      //   tempData.length,
+      //   "records with 'Order Received' stage",
+      // );
 
       // Step 2: Apply date filter to last_date_of_call if dates are selected
       if (startDate && endDate) {
@@ -733,11 +733,11 @@ function Dashboard() {
           }
         });
 
-        console.log(
-          "📋 Active dealers dialog: After date filtering:",
-          tempData.length,
-          "records",
-        );
+        // console.log(
+        //   "📋 Active dealers dialog: After date filtering:",
+        //   tempData.length,
+        //   "records",
+        // );
       }
 
       // Get unique dealers
@@ -751,7 +751,7 @@ function Dashboard() {
         }
       });
 
-      console.log("📋 Active dealers dialog data count:", dataForDialog.length);
+      // console.log("📋 Active dealers dialog data count:", dataForDialog.length);
     } else if (kpiType === "totalOrders") {
       title = "Total Orders";
       let tempData = [...baseData];

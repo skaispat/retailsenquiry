@@ -46,7 +46,7 @@ const App = () => {
 
     if (auth === "true" && storedUser) {
       const parsedUser = JSON.parse(storedUser);
-      
+
       // For admin users, skip the access check (case-insensitive)
       if (isAdminUser(parsedUser.role)) {
         setIsAuthenticated(true);
@@ -57,20 +57,20 @@ const App = () => {
         // # ========== ONCE PER DAY USER'S LOGIN RESTRICTION LOGIC ===== # Lines 58-79)
         // checkLoginAccess(parsedUser.username).then((canLogin) => {
         //   if (canLogin) {
-            setIsAuthenticated(true);
-            setCurrentUser(parsedUser);
-            setUserType(parsedUser.role);
-            setTabs(parsedUser.tabs || []);
-            
-            // Restore first login time if available
-            if (storedFirstLoginTime) {
-              const loginTime = new Date(parseInt(storedFirstLoginTime));
-              setFirstLoginTime(loginTime);
-              setupAutoLogoutFromFirstLogin(loginTime);
-            } else {
-              // If no stored first login time, setup auto logout from now
-              setupAutoLogout();
-            }
+        setIsAuthenticated(true);
+        setCurrentUser(parsedUser);
+        setUserType(parsedUser.role);
+        setTabs(parsedUser.tabs || []);
+
+        // Restore first login time if available
+        if (storedFirstLoginTime) {
+          const loginTime = new Date(parseInt(storedFirstLoginTime));
+          setFirstLoginTime(loginTime);
+          setupAutoLogoutFromFirstLogin(loginTime);
+        } else {
+          // If no stored first login time, setup auto logout from now
+          setupAutoLogout();
+        }
         //   } else {
         //     // Clear storage if access denied
         //     localStorage.clear();
@@ -85,7 +85,7 @@ const App = () => {
   const checkLoginAccess = async (username) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Check if user already logged in today and logged out
       const { data, error } = await supabase
         .from('user_logs')
@@ -120,7 +120,7 @@ const App = () => {
   const getFirstLoginTime = async (username) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      
+
       const { data, error } = await supabase
         .from('user_logs')
         .select('login_time, login_date')
@@ -137,7 +137,7 @@ const App = () => {
       if (data && data.length > 0) {
         const loginTimeStr = data[0].login_time;
         const loginDateStr = data[0].login_date;
-        
+
         // Combine date and time to create a proper Date object
         const loginDateTime = new Date(`${loginDateStr}T${loginTimeStr}`);
         return loginDateTime;
@@ -183,7 +183,7 @@ const App = () => {
         // Update the most recent login record without logout time
         const { error } = await supabase
           .from('user_logs')
-          .update({ 
+          .update({
             logout_time: loginTime
           })
           .eq('user_name', username)
@@ -215,7 +215,7 @@ const App = () => {
     const logoutTime = new Date(firstLoginTime.getTime() + (9 * 60 * 60 * 1000)); // 9 hours from first login
 
     let timeUntilLogout;
-    
+
     if (now > logoutTime) {
       // If it's already past logout time, logout immediately
       timeUntilLogout = 0;
@@ -267,14 +267,14 @@ const App = () => {
     if (currentUser) {
       logUserActivity(currentUser.username, 'logout');
     }
-    
+
     setIsAuthenticated(false);
     setCurrentUser(null);
     setUserType(null);
     setTabs([]);
     setFirstLoginTime(null);
     localStorage.clear();
-    
+
     if (autoLogoutTimer) {
       clearTimeout(autoLogoutTimer);
       setAutoLogoutTimer(null);
@@ -286,10 +286,10 @@ const App = () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const requestTime = new Date().toTimeString().split(' ')[0];
-      
+
       const { error } = await supabase
         .from('user_logs')
-        .update({ 
+        .update({
           access_requested: true,
           request_time: requestTime
         })
@@ -339,7 +339,7 @@ const App = () => {
 
       if (data) {
         const userIsAdmin = isAdminUser(data.role);
-        
+
         // # ===== LOGIN ONCE PER DAY USER'S restriction during login (Lines 344-350)
         // if (!userIsAdmin) {
         //   const canLogin = await checkLoginAccess(username);
@@ -355,19 +355,19 @@ const App = () => {
           position: data.position || "",
           salesPersonName: data.sales_person_name || "Unknown Sales Person",
           loginTime: new Date().toISOString(),
-          tabs: data.access === "all" 
+          tabs: data.access === "all"
             ? [
-                "Dashboard",
-                "Dealer Form",
-                "Tracker",
-                "History",
-                "Reports",
-                "Attendance",
-                "Attendance History",
-                "Daily Report",
-                "User Management", // Add User Management for admins
-                ...(userIsAdmin ? ["Admin Logs"] : [])
-              ]
+              "Dashboard",
+              "Dealer Form",
+              "Tracker",
+              "History",
+              "Reports",
+              "Attendance",
+              "Attendance History",
+              "Daily Report",
+              "User Management", // Add User Management for admins
+              ...(userIsAdmin ? ["Admin Logs"] : [])
+            ]
             : (data.access || "").split(",").map((t) => t.trim()).filter(Boolean),
         };
 
@@ -394,7 +394,7 @@ const App = () => {
         if (!userIsAdmin) {
           // Get first login time of the day
           const firstLogin = await getFirstLoginTime(username);
-          
+
           if (firstLogin) {
             // Use the first login time of the day
             setFirstLoginTime(firstLogin);
@@ -437,13 +437,13 @@ const App = () => {
     setTabs([]);
     setFirstLoginTime(null);
     localStorage.clear();
-    
+
     // Clear auto logout timer
     if (autoLogoutTimer) {
       clearTimeout(autoLogoutTimer);
       setAutoLogoutTimer(null);
     }
-    
+
     displayNotification("Logged out successfully", "success");
   };
 
@@ -489,21 +489,21 @@ const App = () => {
                 <div className="text-center">
                   {/* Welcome Icon */}
                   <div className="mx-auto mb-6 w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <svg 
-                      className="w-10 h-10 text-white" 
-                      fill="none" 
-                      stroke="currentColor" 
+                    <svg
+                      className="w-10 h-10 text-white"
+                      fill="none"
+                      stroke="currentColor"
                       viewBox="0 0 24 24"
                     >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" 
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
                       />
                     </svg>
                   </div>
-                  
+
                   {/* Welcome Message */}
                   <h2 className="text-2xl font-bold text-gray-800 mb-2">
                     Welcome to
@@ -511,7 +511,7 @@ const App = () => {
                   <h3 className="text-xl font-semibold text-blue-600 mb-4">
                     Retail Enquiry Management System
                   </h3>
-                  
+
                   {/* User Greeting */}
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6">
                     <p className="text-lg font-medium text-gray-700">
@@ -521,7 +521,7 @@ const App = () => {
                       Role: <span className="font-medium capitalize">{currentUser.position}</span>
                     </p>
                   </div>
-                  
+
                   {/* Loading Animation */}
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -544,20 +544,18 @@ const App = () => {
 
           {/* Main Content Wrapper */}
           <div
-            className={`flex flex-col flex-1 overflow-hidden ${
-              isAuthenticated ? "md:ml-64" : ""
-            }`}
+            className={`flex flex-col flex-1 overflow-hidden ${isAuthenticated ? "md:ml-64" : ""
+              }`}
           >
             {/* Notification bar */}
             {notification && (
               <div
-                className={`p-4 text-sm ${
-                  notification.type === "error"
-                    ? "bg-red-100 text-red-700"
-                    : notification.type === "success"
+                className={`p-4 text-sm ${notification.type === "error"
+                  ? "bg-red-100 text-red-700"
+                  : notification.type === "success"
                     ? "bg-green-100 text-green-700"
                     : "bg-blue-100 text-blue-700"
-                }`}
+                  }`}
               >
                 {notification.message}
               </div>
@@ -655,14 +653,14 @@ const App = () => {
                 </Routes>
               </div>
               {/* Footer */}
-              <footer className=" fixed bottom-0 left-0 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white text-center py-3 shadow-inner z-50">
-                <p className="text-sm font-medium">
+              <footer className="mt-auto py-0 text-center border-t border-slate-100">
+                <p className="text-xs font-semibold text-slate-400">
                   Powered by{" "}
                   <a
                     href="https://www.botivate.in/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline hover:text-yellow-300 transition"
+                    className="hover:text-blue-500 transition-colors underline decoration-slate-200 underline-offset-2"
                   >
                     Botivate
                   </a>
