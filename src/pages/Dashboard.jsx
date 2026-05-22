@@ -861,7 +861,7 @@ function Dashboard() {
                 Dashboard
               </h1>
               <p className="text-sm font-medium sm:text-base md:text-lg text-slate-600">
-                {getGreeting()}, {currentUserSalesPersonName}!
+                {getGreeting()}, {isAdmin ? "Abhishek Agrawal (MD)" : currentUserSalesPersonName}!
               </p>
             </div>
           </div>
@@ -883,7 +883,7 @@ function Dashboard() {
               Dashboard
             </h1>
             <p className="text-sm font-medium sm:text-base md:text-lg text-slate-600">
-              {getGreeting()}, {currentUserSalesPersonName}!
+              {getGreeting()}, {isAdmin ? "Abhishek Agrawal (MD)" : currentUserSalesPersonName}
             </p>
           </div>
           <div className="flex flex-col w-full gap-2 px-3 py-2 border rounded-lg shadow-md sm:flex-row bg-white/80 backdrop-blur-sm sm:rounded-xl sm:px-4 sm:py-3 sm:shadow-lg border-white/20 sm:w-auto">

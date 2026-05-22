@@ -15,7 +15,7 @@ const Tracker = () => {
   const [col4Filter, setCol4Filter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCards, setExpandedCards] = useState(new Set());
-  
+
   // Get user authentication context
   const { currentUser, isAuthenticated } = useContext(AuthContext);
 
@@ -106,7 +106,7 @@ const Tracker = () => {
   const fetchFMSDataFromSupabase = async () => {
     try {
 
-      
+
       let query = supabase
         .from('FMS')
         .select('*')
@@ -138,7 +138,7 @@ const Tracker = () => {
   const fetchMasterDataFromSupabase = async () => {
     try {
 
-      
+
       const { data, error } = await supabase
         .from('dropdown')
         .select('*');
@@ -148,7 +148,7 @@ const Tracker = () => {
       }
 
 
-      
+
       const transformedData = data.map(item => ({
         col1: item.status || "",
         col2: item.stage || "",
@@ -170,10 +170,10 @@ const Tracker = () => {
         _id: `${rowIndex}-${Math.random().toString(36).substr(2, 9)}`,
         _rowIndex: rowIndex + 1,
       };
-      
+
       if (row.col1) itemObj.col1 = row.col1;
       if (row.col2) itemObj.col2 = row.col2;
-      
+
       return itemObj;
     });
   };
@@ -193,13 +193,13 @@ const Tracker = () => {
     const lat = item.latitude;
     const lng = item.longitude;
     const dealerName = item.col5 || "Dealer Location";
-    
+
     // Create Google Maps URL
     const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}&z=15`;
-    
+
     // Open in new tab
     window.open(mapsUrl, '_blank', 'noopener,noreferrer');
-    
+
     // Optional: Show success message
     toast.success(`Opening ${dealerName} location in Google Maps`, {
       duration: 2000,
@@ -280,7 +280,7 @@ const Tracker = () => {
     if (!dateString) return "N/A";
 
     let date;
-    
+
     if (typeof dateString === 'string' && dateString.includes('T')) {
       date = new Date(dateString);
     } else if (typeof dateString === 'string' && dateString.startsWith('Date(')) {
@@ -459,7 +459,7 @@ const Tracker = () => {
   return (
     <>
       <Toaster position="top-right" />
-      
+
       <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-3 lg:p-8 overflow-hidden">
         <div className="max-w-7xl mx-auto h-full flex flex-col">
           {/* Main Card - Takes full height */}
@@ -485,7 +485,7 @@ const Tracker = () => {
                       {isAdmin && " - Admin View"}
                     </p>
                   </div>
-                  
+
                   {/* Export Button - Right aligned */}
                   <div className="flex justify-center lg:justify-end">
                     <button
@@ -498,7 +498,7 @@ const Tracker = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Search Bar - Fixed */}
               <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
                 <div className="flex items-center">
@@ -535,7 +535,7 @@ const Tracker = () => {
                           ))}
                         </tr>
                       </thead>
-                      
+
                       {/* Scrollable Table Body */}
                       <tbody className="bg-white divide-y divide-slate-200">
                         {filteredIndents.length === 0 ? (
@@ -563,11 +563,10 @@ const Tracker = () => {
                                   {header.id === "location" ? (
                                     <button
                                       onClick={() => openInGoogleMaps(item)}
-                                      className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${
-                                        item.latitude && item.longitude 
-                                          ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 hover:shadow-sm" 
+                                      className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${item.latitude && item.longitude
+                                          ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 hover:shadow-sm"
                                           : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-                                      }`}
+                                        }`}
                                       disabled={!item.latitude || !item.longitude}
                                       title={item.latitude && item.longitude ? "Open in Google Maps" : "Location not available"}
                                     >
@@ -606,7 +605,7 @@ const Tracker = () => {
                       return (
                         <div key={item._id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                           {/* Card Header - Always Visible */}
-                          <div 
+                          <div
                             className="p-3 sm:p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50/50 transition-colors"
                             onClick={() => toggleCardExpansion(item._id)}
                           >
@@ -647,11 +646,10 @@ const Tracker = () => {
                                       {header.id === "location" ? (
                                         <button
                                           onClick={() => openInGoogleMaps(item)}
-                                          className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${
-                                            item.latitude && item.longitude 
-                                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200" 
+                                          className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${item.latitude && item.longitude
+                                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200"
                                               : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-                                          }`}
+                                            }`}
                                           disabled={!item.latitude || !item.longitude}
                                         >
                                           <MapPin className="h-4 w-4" />
@@ -666,7 +664,7 @@ const Tracker = () => {
                                   </div>
                                 ))}
                               </div>
-                              
+
                               {/* Action Button */}
                               <div className="mt-4 pt-4 border-t border-slate-200">
                                 <button

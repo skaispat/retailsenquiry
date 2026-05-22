@@ -75,8 +75,8 @@ function Login() {
 
             {error && (
               <div className={`mb-4 p-3 rounded-md ${error.includes("denied") || error.includes("request")
-                  ? "bg-yellow-100 border border-yellow-200 text-yellow-700"
-                  : "bg-red-100 border border-red-200 text-red-700"
+                ? "bg-yellow-100 border border-yellow-200 text-yellow-700"
+                : "bg-red-100 border border-red-200 text-red-700"
                 }`}>
                 {error}
               </div>

@@ -176,7 +176,7 @@ const Attendance = () => {
         formData.startDate &&
         formData.endDate &&
         new Date(formData.endDate + "T00:00:00") <
-          new Date(formData.startDate + "T00:00:00")
+        new Date(formData.startDate + "T00:00:00")
       ) {
         newErrors.endDate = "End date cannot be before start date";
       }
@@ -199,19 +199,29 @@ const Attendance = () => {
     try {
       // Get today's date for filtering
       const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+      // Get today's date in local format YYYY-MM-DD
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayString = `${year}-${month}-${day}`;
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowYear = tomorrow.getFullYear();
+      const tomorrowMonth = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
+      const tomorrowString = `${tomorrowYear}-${tomorrowMonth}-${tomorrowDay}`;
 
       console.log("Fetching today's attendance data...");
-      console.log("Today start:", todayStart);
-      console.log("Today end:", todayEnd);
+      console.log("Today start:", `${todayString}T00:00:00`);
+      console.log("Today end:", `${tomorrowString}T00:00:00`);
 
       // Fetch only today's attendance records
       const { data, error } = await supabase
         .from('attendance')
         .select('*')
-        .gte('date_and_time', todayStart.toISOString())
-        .lt('date_and_time', todayEnd.toISOString())
+        .gte('date_and_time', `${todayString}T00:00:00`)
+        .lt('date_and_time', `${tomorrowString}T00:00:00`)
         .order('date_and_time', { ascending: false });
 
       if (error) {
@@ -243,8 +253,8 @@ const Attendance = () => {
         userRole === "Admin"
           ? formattedHistory
           : formattedHistory.filter(
-              (entry) => entry.salesPersonName === salesPersonName
-            );
+            (entry) => entry.salesPersonName === salesPersonName
+          );
 
       console.log("Filtered history count:", filteredHistory.length);
       setAttendance(filteredHistory);
@@ -327,7 +337,7 @@ const Attendance = () => {
       setIsGettingLocation(false);
 
       const currentDate = new Date();
-      
+
       // Prepare data for Supabase according to your schema
       const attendanceRecord = {
         date_and_time: currentDate.toISOString(),
@@ -623,9 +633,8 @@ const Attendance = () => {
               </div>
 
               <h2
-                className={`text-2xl font-bold mb-4 ${
-                  modalType === "success" ? "text-green-600" : "text-red-600"
-                }`}
+                className={`text-2xl font-bold mb-4 ${modalType === "success" ? "text-green-600" : "text-red-600"
+                  }`}
               >
                 {modalType === "success" ? "Success!" : "Error!"}
               </h2>
@@ -636,11 +645,10 @@ const Attendance = () => {
 
               <button
                 onClick={closeModal}
-                className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${
-                  modalType === "success"
-                    ? "bg-green-500 hover:bg-green-600 focus:ring-green-300"
-                    : "bg-red-500 hover:bg-red-600 focus:ring-red-300"
-                }`}
+                className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${modalType === "success"
+                  ? "bg-green-500 hover:bg-green-600 focus:ring-green-300"
+                  : "bg-red-500 hover:bg-red-600 focus:ring-red-300"
+                  }`}
               >
                 Ok
               </button>

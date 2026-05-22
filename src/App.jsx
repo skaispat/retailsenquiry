@@ -276,7 +276,9 @@ const App = () => {
                   {/* User Greeting */}
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6">
                     <p className="text-lg font-medium text-gray-700">
-                      Hello, <span className="font-bold text-blue-600">{currentUser.salesPersonName}</span>!
+                      Hello, <span className="font-bold text-blue-600">
+                        {currentUser.role.toLowerCase() === "admin" ? "Abhishek Agrawal (MD)" : currentUser.salesPersonName}
+                      </span>!
                     </p>
                     <p className="text-sm text-gray-500 mt-1">
                       Role: <span className="font-medium capitalize">{currentUser.position}</span>
