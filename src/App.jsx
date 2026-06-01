@@ -207,6 +207,11 @@ const App = () => {
       });
     }
 
+    // Clear local storage
+    localStorage.removeItem("isAuthenticated");
+    localStorage.removeItem("currentUser");
+    localStorage.removeItem("userType");
+
     setIsAuthenticated(false);
     setCurrentUser(null);
     setUserType(null);
@@ -256,7 +261,7 @@ const App = () => {
               <div className="bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform animate-in zoom-in-95 scale-100 opacity-100">
                 <div className="text-center">
                   {/* Welcome Icon */}
-                  <div className="mx-auto mb-6 w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <div className="mx-auto mb-6 w-20 h-20 bg-gradient-to-r from-[#800000] to-[#b30000] rounded-full flex items-center justify-center">
                     <svg
                       className="w-10 h-10 text-white"
                       fill="none"
@@ -276,14 +281,14 @@ const App = () => {
                   <h2 className="text-2xl font-bold text-gray-800 mb-2">
                     Welcome to
                   </h2>
-                  <h3 className="text-xl font-semibold text-blue-600 mb-4">
+                  <h3 className="text-xl font-semibold text-[#800000] mb-4">
                     Retail Enquiry Management System
                   </h3>
 
                   {/* User Greeting */}
-                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6">
+                  <div className="bg-gradient-to-r from-red-50 to-rose-50 rounded-lg p-4 mb-6">
                     <p className="text-lg font-medium text-gray-700">
-                      Hello, <span className="font-bold text-blue-600">
+                      Hello, <span className="font-bold text-[#800000]">
                         {currentUser.salesPersonName}
                       </span>!
                     </p>
@@ -294,7 +299,7 @@ const App = () => {
 
                   {/* Loading Animation */}
                   <div className="flex justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#800000]"></div>
                   </div>
                 </div>
               </div>

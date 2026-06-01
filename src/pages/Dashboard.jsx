@@ -1250,7 +1250,7 @@ function Dashboard() {
                   </select>
                 </div>
               )}
-              {isAdmin && (
+              {currentUser?.username === 'admin' && (
                 <div className="flex items-center gap-2 text-slate-700">
                   <span><pre>  </pre></span>
                   <button
