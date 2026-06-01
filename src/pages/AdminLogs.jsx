@@ -26,7 +26,7 @@ function AdminLogs() {
 
     checkScreenSize();
     window.addEventListener('resize', checkScreenSize);
-    
+
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
@@ -34,8 +34,8 @@ function AdminLogs() {
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      console.log("Fetching logs with filters:", filters);
-      
+      // console.log("Fetching logs with filters:", filters);
+
       let query = supabase
         .from('user_logs')
         .select('*')
@@ -59,8 +59,8 @@ function AdminLogs() {
         console.error("Supabase error:", error);
         throw error;
       }
-      
-      console.log("Fetched logs:", data);
+
+      // console.log("Fetched logs:", data);
       setLogs(data || []);
     } catch (error) {
       console.error("Error fetching logs:", error);
@@ -73,8 +73,8 @@ function AdminLogs() {
   // Fetch access requests - Improved query
   const fetchAccessRequests = async () => {
     try {
-      console.log("Fetching access requests...");
-      
+      // console.log("Fetching access requests...");
+
       const { data, error } = await supabase
         .from('user_logs')
         .select('*')
@@ -85,8 +85,8 @@ function AdminLogs() {
         console.error("Supabase error for access requests:", error);
         throw error;
       }
-      
-      console.log("Fetched access requests:", data);
+
+      // console.log("Fetched access requests:", data);
       setAccessRequests(data || []);
     } catch (error) {
       console.error("Error fetching access requests:", error);
@@ -97,8 +97,8 @@ function AdminLogs() {
   // Grant access to user - Improved logic
   const grantAccess = async (logId, userName) => {
     try {
-      console.log(`Granting access to ${userName}, logId: ${logId}`);
-      
+      // console.log(`Granting access to ${userName}, logId: ${logId}`);
+
       // First, get the current record to understand the state
       const { data: currentRecord, error: fetchError } = await supabase
         .from('user_logs')
@@ -111,7 +111,7 @@ function AdminLogs() {
         throw fetchError;
       }
 
-      console.log("Current record:", currentRecord);
+      // console.log("Current record:", currentRecord);
 
       // Update the log record - set logout_time to null and access_requested to false
       const { error } = await supabase
@@ -139,8 +139,8 @@ function AdminLogs() {
   // Reject access request
   const rejectAccess = async (logId, userName) => {
     try {
-      console.log(`Rejecting access for ${userName}, logId: ${logId}`);
-      
+      // console.log(`Rejecting access for ${userName}, logId: ${logId}`);
+
       // Update the log record to remove access request but keep logout time
       const { error } = await supabase
         .from('user_logs')
@@ -165,8 +165,8 @@ function AdminLogs() {
   // Test function to check database structure
   const checkDatabaseStructure = async () => {
     try {
-      console.log("Checking database structure...");
-      
+      // console.log("Checking database structure...");
+
       // Check if table exists and get sample data
       const { data, error } = await supabase
         .from('user_logs')
@@ -178,13 +178,13 @@ function AdminLogs() {
         return;
       }
 
-      console.log("Sample data from user_logs:", data);
-      
+      // console.log("Sample data from user_logs:", data);
+
       // Check columns
       if (data && data.length > 0) {
         const firstRecord = data[0];
-        console.log("Available columns:", Object.keys(firstRecord));
-        console.log("First record details:", firstRecord);
+        // console.log("Available columns:", Object.keys(firstRecord));
+        // console.log("First record details:", firstRecord);
       }
     } catch (error) {
       console.error("Error checking database structure:", error);
@@ -243,10 +243,10 @@ function AdminLogs() {
   const exportData = () => {
     try {
       const dataToExport = activeTab === "history" ? logs : accessRequests;
-      const headers = activeTab === "history" 
+      const headers = activeTab === "history"
         ? ["User Name", "Login Date", "Login Time", "Logout Time", "Status", "Access Requested"]
         : ["User Name", "Login Date", "Request Time", "Status"];
-      
+
       const csvContent = [
         headers.join(","),
         ...dataToExport.map(item => {
@@ -291,7 +291,7 @@ function AdminLogs() {
   // Mobile Card View for History
   const MobileHistoryView = ({ items }) => {
     return (
-      <div className="flex flex-col h-[calc(100vh-400px)] bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="flex flex-col max-h-[calc(100vh-250px)] bg-white rounded-lg border border-gray-200 overflow-hidden">
         {/* Fixed Header */}
         <div className="flex-shrink-0 bg-gray-50 border-b border-gray-200 px-4 py-3">
           <div className="flex justify-between items-center">
@@ -342,11 +342,10 @@ function AdminLogs() {
                   <div className="flex justify-between items-start">
                     <span className="text-sm font-medium text-gray-500">Status:</span>
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        log.logout_time
-                          ? "bg-green-100 text-green-800"
-                          : "bg-blue-100 text-blue-800"
-                      }`}
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${log.logout_time
+                        ? "bg-red-100 text-red-800"
+                        : "bg-green-100 text-green-800"
+                        }`}
                     >
                       {log.logout_time ? "Logged Out" : "Active"}
                     </span>
@@ -422,7 +421,7 @@ function AdminLogs() {
                 <tr>
                   <td colSpan="7" className="px-6 py-8 text-center">
                     <div className="flex items-center justify-center">
-                      <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
+                      <RefreshCw className="h-6 w-6 animate-spin text-[#800000] mr-2" />
                       <span className="text-gray-600">Loading logs...</span>
                     </div>
                   </td>
@@ -450,11 +449,10 @@ function AdminLogs() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          log.logout_time
-                            ? "bg-green-100 text-green-800"
-                            : "bg-blue-100 text-blue-800"
-                        }`}
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${log.logout_time
+                          ? "bg-red-100 text-red-800"
+                          : "bg-green-100 text-green-800"
+                          }`}
                       >
                         {log.logout_time ? "Logged Out" : "Active"}
                       </span>
@@ -497,22 +495,19 @@ function AdminLogs() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-4 lg:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 p-4 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Main Card */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
           {/* Header Section */}
-          <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-6 lg:px-8">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="text-center lg:text-left">
-                <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
+          <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 py-6 lg:px-8">
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-left">
+                <h3 className="text-xl lg:text-2xl font-bold text-white">
                   Admin Logs
                 </h3>
-                <p className="text-orange-50 text-sm lg:text-lg">
-                  Manage user access and view login history
-                </p>
               </div>
-              <div className="flex flex-wrap items-center justify-center gap-3">
+              <div className="flex items-center justify-end gap-3">
                 {/* Mobile Filter Toggle */}
                 {isMobile && activeTab === "history" && (
                   <div className="relative">
@@ -547,24 +542,22 @@ function AdminLogs() {
           <div className="p-4 lg:p-8">
             {/* Tabs */}
             <div className="border-b border-gray-200 mb-6">
-              <nav className="flex -mb-px">
+              <nav className="flex -mb-px overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setActiveTab("history")}
-                  className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${
-                    activeTab === "history"
-                      ? "border-blue-500 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
+                  className={`py-3 sm:py-4 px-4 sm:px-6 text-center border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none transition-colors ${activeTab === "history"
+                    ? "border-[#800000] text-[#800000]"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
                 >
                   Login History
                 </button>
                 <button
                   onClick={() => setActiveTab("requests")}
-                  className={`py-4 px-6 text-center border-b-2 font-medium text-sm relative ${
-                    activeTab === "requests"
-                      ? "border-blue-500 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
+                  className={`py-3 sm:py-4 px-4 sm:px-6 text-center border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap relative flex-1 sm:flex-none transition-colors ${activeTab === "requests"
+                    ? "border-[#800000] text-[#800000]"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
                 >
                   Access Requests
                   {accessRequests.length > 0 && (
@@ -587,7 +580,7 @@ function AdminLogs() {
                       <input
                         type="search"
                         placeholder="Search by user name..."
-                        className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                         value={filters.userName}
                         onChange={(e) => handleFilterChange("userName", e.target.value)}
                       />
@@ -601,7 +594,7 @@ function AdminLogs() {
                         type="date"
                         value={filters.startDate}
                         onChange={(e) => handleFilterChange("startDate", e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       />
                     </div>
 
@@ -613,14 +606,14 @@ function AdminLogs() {
                         type="date"
                         value={filters.endDate}
                         onChange={(e) => handleFilterChange("endDate", e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       />
                     </div>
 
                     <div className="flex gap-2">
                       <button
                         onClick={fetchLogs}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                        className="flex-1 px-4 py-2 bg-[#800000] text-white rounded-md hover:bg-[#990000] text-sm"
                       >
                         Apply Filters
                       </button>
@@ -647,7 +640,7 @@ function AdminLogs() {
                           value={filters.userName}
                           onChange={(e) => handleFilterChange("userName", e.target.value)}
                           placeholder="Search by user name..."
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#800000]"
                         />
                       </div>
                       <div>
@@ -658,7 +651,7 @@ function AdminLogs() {
                           type="date"
                           value={filters.startDate}
                           onChange={(e) => handleFilterChange("startDate", e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#800000]"
                         />
                       </div>
                       <div>
@@ -669,13 +662,13 @@ function AdminLogs() {
                           type="date"
                           value={filters.endDate}
                           onChange={(e) => handleFilterChange("endDate", e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#800000]"
                         />
                       </div>
                       <div className="flex gap-2">
                         <button
                           onClick={fetchLogs}
-                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                          className="flex items-center gap-2 px-4 py-2 bg-[#800000] text-white rounded-md hover:bg-[#990000]"
                         >
                           <Filter className="h-4 w-4" />
                           Apply
@@ -698,7 +691,7 @@ function AdminLogs() {
                     <input
                       type="search"
                       placeholder="Search by user name..."
-                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       value={filters.userName}
                       onChange={(e) => handleFilterChange("userName", e.target.value)}
                     />
@@ -734,7 +727,7 @@ function AdminLogs() {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-4 max-h-[calc(100vh-400px)] overflow-y-auto">
+                  <div className="space-y-4 max-h-[calc(100vh-250px)] overflow-y-auto">
                     {accessRequests.map((request) => (
                       <div
                         key={request.id}
@@ -749,26 +742,26 @@ function AdminLogs() {
                               Requested on {formatDate(request.login_date)} at {formatTime(request.request_time)}
                             </p>
                             <p className="text-sm text-gray-600">
-                              Last login: {formatTime(request.login_time)} | 
+                              Last login: {formatTime(request.login_time)} |
                               Logout: {formatTime(request.logout_time) || "Not logged out"}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
                               Request ID: {request.id}
                             </p>
                           </div>
-                          <div className="flex gap-2 mt-3 sm:mt-0">
+                          <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
                             <button
                               onClick={() => grantAccess(request.id, request.user_name)}
-                              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                              className="flex items-center justify-center flex-1 sm:flex-none gap-1 sm:gap-2 px-3 py-2 sm:px-4 bg-green-600 text-white rounded-md hover:bg-green-700 text-xs sm:text-sm transition-colors"
                             >
-                              <CheckCircle className="h-4 w-4" />
-                              Grant Access
+                              <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                              Grant
                             </button>
                             <button
                               onClick={() => rejectAccess(request.id, request.user_name)}
-                              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+                              className="flex items-center justify-center flex-1 sm:flex-none gap-1 sm:gap-2 px-3 py-2 sm:px-4 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs sm:text-sm transition-colors"
                             >
-                              <XCircle className="h-4 w-4" />
+                              <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                               Reject
                             </button>
                           </div>

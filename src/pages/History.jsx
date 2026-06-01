@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useContext } from "react";
 import { toast, Toaster } from "react-hot-toast";
-import { Download, Filter, Search, X, ChevronDown, ChevronUp, Calendar, User, Building, MapPin, Edit, Save, RotateCcw, Map} from "lucide-react";
+import { Download, Filter, Search, X, ChevronDown, ChevronUp, Calendar, User, Building, MapPin, Edit, Save, RotateCcw, Map } from "lucide-react";
 import { AuthContext } from "../App";
 import supabase from "../SupaabseClient";
 
@@ -40,10 +40,10 @@ const History = () => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 1024);
     };
-        
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-        
+
     return () => {
       window.removeEventListener('resize', checkMobile);
     };
@@ -55,12 +55,12 @@ const History = () => {
       setError(null);
 
       if (!isAuthenticated) {
-        console.log("Not authenticated. Skipping data fetch for History.");
+        // console.log("Not authenticated. Skipping data fetch for History.");
         setIsLoading(false);
         return;
       }
 
-      console.log("🔄 Fetching data from Supabase: tracking_history...");
+      // console.log("🔄 Fetching data from Supabase: tracking_history...");
 
       const { data, error } = await supabase
         .from("tracking_history")
@@ -68,13 +68,13 @@ const History = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw new Error(error.message);
-            
-      console.log("✅ tracking_history data loaded successfully from Supabase");
+
+      // console.log("✅ tracking_history data loaded successfully from Supabase");
 
       // Define column mapping for display based on your actual schema
       const COLUMN_MAPPINGS = {
         "Timestamp": "created_at",
-        "Dealer Code": "dealer_code",
+        "Dealer/Distributor Site": "deler_distributer_site_name",
         "Sales Person Name": "sales_person_name",
         "Area Name": "area_name",
         "Stage": "stage",
@@ -86,8 +86,8 @@ const History = () => {
         "Order Qty": "order_qty",
         "Order Products": "order_products",
         "Value of Order": "value_of_order",
+        // "Dealer Code": "dealer_code",
         "Payment (Yes/No)": "payment_yes_no",
-        "Dealer/Distributor Site": "deler_distributer_site_name",
         "Select Value": "select_value",
         // Location column will be added conditionally for admin
       };
@@ -132,10 +132,10 @@ const History = () => {
   // Improved date formatting function
   const formatDateToDDMMYYYY = (dateValue) => {
     if (!dateValue) return "—";
-        
+
     try {
       let date;
-            
+
       if (typeof dateValue === 'string') {
         if (dateValue.includes('T')) {
           date = new Date(dateValue);
@@ -161,9 +161,9 @@ const History = () => {
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear();
-            
+
       return `${day}/${month}/${year}`;
-            
+
     } catch (error) {
       console.error('Date formatting error:', error, 'Original value:', dateValue);
       return String(dateValue);
@@ -318,7 +318,7 @@ const History = () => {
 
   // Start editing - open modal with form
   const startEditing = (item) => {
-    console.log("Starting edit for item:", item);
+    // console.log("Starting edit for item:", item);
     setEditingItem(item);
     setIsEditModalOpen(true);
   };
@@ -326,21 +326,21 @@ const History = () => {
   // Save edit to both tracking_history and FMS tables
   const saveEdit = async (formData) => {
     if (!formData) return;
-        
+
     try {
       setIsSaving(true);
-      console.log("Saving edit with data:", formData);
+      // console.log("Saving edit with data:", formData);
 
       // Create clean payload without React-specific fields
       const cleanPayload = { ...formData };
-            
+
       // Remove React-specific and non-editable fields from the payload
       const fieldsToRemove = [...NON_EDITABLE_FIELDS, '_id', '_rowIndex'];
       fieldsToRemove.forEach(field => {
         delete cleanPayload[field];
       });
 
-      console.log("🔄 Updating tracking_history with payload:", cleanPayload);
+      // console.log("🔄 Updating tracking_history with payload:", cleanPayload);
 
       // Update the existing record in tracking_history
       const supabaseRowId = formData?.id;
@@ -375,13 +375,13 @@ const History = () => {
         value_of_order: formData.value_of_order || null,
         dealer_name: formData.dealer_distributor_site || null,
         select_value: formData.select_value || null,
-                
+
         // Tracker specific fields
         planned: formData.next_date_of_call || null,
         actual: new Date().toISOString().split('T')[0],
       };
 
-      console.log("🔄 Updating FMS with payload:", fmsPayload);
+      // console.log("🔄 Updating FMS with payload:", fmsPayload);
 
       // UPDATE the FMS table where dc_dealer_code matches
       const { error: updateFMSError } = await supabase
@@ -401,7 +401,7 @@ const History = () => {
 
       // Refresh data
       await fetchData();
-            
+
       // Close editing
       setIsEditModalOpen(false);
       setEditingItem(null);
@@ -418,7 +418,7 @@ const History = () => {
   };
 
   const cancelEdit = () => {
-    console.log("Canceling edit");
+    // console.log("Canceling edit");
     setIsEditModalOpen(false);
     setEditingItem(null);
   };
@@ -461,14 +461,14 @@ const History = () => {
                             </h3>
                             <p className="font-semibold text-gray-700 text-sm">{item.select_value}</p>
                           </div>
-                                                  
+
                           {item.area_name && (
                             <div className="flex items-center gap-1 text-sm text-gray-600 mb-2">
                               <MapPin className="h-3 w-3" />
                               <span className="font-medium">{item.area_name}</span>
                             </div>
                           )}
-                                                  
+
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-gray-500 font-medium">Stage:</span>
@@ -497,7 +497,7 @@ const History = () => {
                           if (['dealer_distributor_site', 'area_name', 'stage', 'created_at', 'location'].includes(header.id)) {
                             return null; // Skip already shown fields and location
                           }
-                                                  
+
                           return (
                             <div key={header.id} className="flex justify-between items-start">
                               <span className="text-gray-600 font-medium text-xs flex-shrink-0 mr-2">
@@ -519,11 +519,10 @@ const History = () => {
                                 e.stopPropagation();
                                 openLocationInGoogleMaps(item);
                               }}
-                              className={`text-xs px-3 py-1 rounded-md flex items-center gap-1 transition-colors ${
-                                item.latitude && item.longitude
-                                  ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                  : "bg-gray-100 text-gray-500 cursor-not-allowed"
-                              }`}
+                              className={`text-xs px-3 py-1 rounded-md flex items-center gap-1 transition-colors ${item.latitude && item.longitude
+                                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                : "bg-gray-100 text-gray-500 cursor-not-allowed"
+                                }`}
                               disabled={!item.latitude || !item.longitude}
                             >
                               <Map className="h-3 w-3" />
@@ -531,7 +530,7 @@ const History = () => {
                             </button>
                           </div>
                         )}
-                                                
+
                         {/* Action Buttons */}
                         <div className="mt-3 pt-3 border-t border-gray-200">
                           <div className="flex gap-2">
@@ -602,7 +601,7 @@ const History = () => {
                       if (header.id === 'location') {
                         // Only show location column for admin
                         if (userRole.toLowerCase() !== "admin") return null;
-                        
+
                         return (
                           <td
                             key={header.id}
@@ -610,11 +609,10 @@ const History = () => {
                           >
                             <button
                               onClick={() => openLocationInGoogleMaps(item)}
-                              className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs transition-colors ${
-                                item.latitude && item.longitude
-                                  ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                  : "bg-gray-100 text-gray-500 cursor-not-allowed"
-                              }`}
+                              className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs transition-colors ${item.latitude && item.longitude
+                                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                : "bg-gray-100 text-gray-500 cursor-not-allowed"
+                                }`}
                               disabled={!item.latitude || !item.longitude}
                               title={item.latitude && item.longitude ? "Open location in Google Maps" : "Location not available"}
                             >
@@ -640,7 +638,7 @@ const History = () => {
                         </td>
                       );
                     })}
-                     
+
                     <td className="px-6 py-4 text-sm text-gray-800 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <button
@@ -709,7 +707,7 @@ const History = () => {
               if (!header.isEditable) return null;
 
               const value = localFormData[header.id] || '';
-              
+
               return (
                 <div key={header.id} className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
@@ -718,13 +716,13 @@ const History = () => {
                       <span className="text-red-500 ml-1">*</span>
                     )}
                   </label>
-                  
+
                   {isDateColumn(header.label) ? (
                     <input
                       type="date"
                       value={value ? new Date(value).toISOString().split('T')[0] : ''}
                       onChange={(e) => handleInputChange(header.id, e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] focus:border-transparent"
                       disabled={isSaving}
                     />
                   ) : (
@@ -732,7 +730,7 @@ const History = () => {
                       type="text"
                       value={value}
                       onChange={(e) => handleInputChange(header.id, e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] focus:border-transparent"
                       disabled={isSaving}
                       placeholder={`Enter ${header.label}`}
                     />
@@ -748,7 +746,7 @@ const History = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               {sheetHeaders.map((header) => {
                 if (header.isEditable) return null;
-                
+
                 const value = localFormData[header.id];
                 if (!value) return null;
 
@@ -795,7 +793,7 @@ const History = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
           <p className="text-slate-600 font-medium">Loading interaction data...</p>
@@ -806,7 +804,7 @@ const History = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
           <div className="text-red-500 mb-4">
             <svg
@@ -841,42 +839,35 @@ const History = () => {
   return (
     <>
       <Toaster position="top-right" />
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-4 lg:p-8">
-        <div className="max-w-7xl mx-auto space-y-8">
+      <div className="w-full bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 p-0 sm:p-4 lg:p-8 rounded-xl">
+        <div className="max-w-7xl mx-auto flex flex-col">
           {/* Main Card */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl md:rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col">
             {/* Header Section */}
-            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-6 lg:px-8">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="text-center lg:text-left">
-                  <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
+            <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 py-6 lg:px-8">
+              <div className="flex flex-row items-center justify-between gap-2 lg:gap-4">
+                <div className="text-left">
+                  <h3 className="text-lg lg:text-2xl font-bold text-white mb-0">
                     Interaction History
                   </h3>
-                  <p className="text-blue-50 text-sm lg:text-base">
-                    View history of all dealer interactions
-                  </p>
-                  <p className="text-blue-100 text-xs mt-2">
-                    Current User: <span className="font-semibold">{currentUserSalesPersonName}</span>
-                    (Role: <span className="font-semibold">{userRole}</span>)
-                  </p>
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="flex flex-row items-center justify-end gap-2 lg:gap-3">
                   {/* Mobile Filter Toggle */}
                   {isMobile && (
                     <button
                       onClick={() => setIsFilterOpen(!isFilterOpen)}
-                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 flex items-center gap-2"
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 lg:py-2 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-1 lg:gap-2 text-sm lg:text-base"
                     >
                       <Filter className="h-4 w-4" />
-                      Filters
+                      <span className="hidden sm:inline">Filters</span>
                     </button>
                   )}
                   <button
                     onClick={exportData}
-                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
+                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 lg:py-2 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-1 lg:gap-2 text-sm lg:text-base"
                   >
                     <Download className="h-4 w-4" />
-                    Export
+                    <span className="hidden sm:inline">Export</span>
                   </button>
                 </div>
               </div>
@@ -892,7 +883,7 @@ const History = () => {
                     <input
                       type="search"
                       placeholder="Search records..."
-                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -907,7 +898,7 @@ const History = () => {
                       type="date"
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                     />
                   </div>
 
@@ -919,7 +910,7 @@ const History = () => {
                     <select
                       value={dealerCodeFilter}
                       onChange={(e) => setDealerCodeFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Dealers</option>
                       {uniqueDealers.map(dealer => (
@@ -935,7 +926,7 @@ const History = () => {
                     <select
                       value={stageFilter}
                       onChange={(e) => setStageFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Stages</option>
                       {uniqueStages.map(stage => (
@@ -954,7 +945,7 @@ const History = () => {
                       <select
                         value={salesPersonFilter}
                         onChange={(e) => setSalesPersonFilter(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                       >
                         <option value="">All Sales Persons</option>
                         {uniqueSalesPersons.map(person => (
@@ -968,7 +959,7 @@ const History = () => {
                   <div className="pt-2 border-t border-gray-200">
                     <button
                       onClick={clearFilters}
-                      className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-2 rounded-md hover:bg-blue-50 transition-colors"
+                      className="w-full text-xs text-[#800000] hover:text-[#660000] font-medium py-2 rounded-md hover:bg-red-50 transition-colors"
                     >
                       Clear All Filters
                     </button>
@@ -984,7 +975,7 @@ const History = () => {
                     <input
                       type="search"
                       placeholder="Search records..."
-                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -995,7 +986,7 @@ const History = () => {
                       type="date"
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000]"
                     />
                   </div>
 
@@ -1003,7 +994,7 @@ const History = () => {
                     <select
                       value={dealerCodeFilter}
                       onChange={(e) => setDealerCodeFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Dealers</option>
                       {uniqueDealers.map(dealer => (
@@ -1016,7 +1007,7 @@ const History = () => {
                     <select
                       value={stageFilter}
                       onChange={(e) => setStageFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Stages</option>
                       {uniqueStages.map(stage => (
@@ -1030,7 +1021,7 @@ const History = () => {
                       <select
                         value={salesPersonFilter}
                         onChange={(e) => setSalesPersonFilter(e.target.value)}
-                        className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                       >
                         <option value="">All Sales Persons</option>
                         {uniqueSalesPersons.map(person => (
@@ -1049,7 +1040,7 @@ const History = () => {
                   <input
                     type="search"
                     placeholder="Search records..."
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />

@@ -11,7 +11,7 @@ const AttendanceHistoryPage = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Filter states
   const [selectedUser, setSelectedUser] = useState('');
 
@@ -26,7 +26,7 @@ const AttendanceHistoryPage = () => {
 
   useEffect(() => {
     filterData();
-  }, [attendanceData, selectedUser]);
+  }, [attendanceData, selectedUser, exportStartDate, exportEndDate]);
 
   const fetchAttendanceData = async () => {
     try {
@@ -65,15 +65,35 @@ const AttendanceHistoryPage = () => {
     }
   };
 
-const filterData = () => {
-  let filtered = attendanceData;
+  const filterData = () => {
+    let filtered = attendanceData;
 
-  if (selectedUser) {
-    filtered = filtered.filter(item => item.sales_person_name === selectedUser);
-  }
+    if (selectedUser) {
+      filtered = filtered.filter(item => item.sales_person_name === selectedUser);
+    }
 
-  setFilteredData(filtered);
-};
+    if (exportStartDate) {
+      const start = new Date(exportStartDate);
+      start.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(item => {
+        if (!item.date_and_time) return false;
+        const itemDate = new Date(item.date_and_time);
+        return itemDate >= start;
+      });
+    }
+
+    if (exportEndDate) {
+      const end = new Date(exportEndDate);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(item => {
+        if (!item.date_and_time) return false;
+        const itemDate = new Date(item.date_and_time);
+        return itemDate <= end;
+      });
+    }
+
+    setFilteredData(filtered);
+  };
 
   const clearFilters = () => {
     setSelectedUser('');
@@ -158,7 +178,7 @@ const filterData = () => {
 
       // Draw header
       const drawHeader = (yPos) => {
-        doc.setFillColor(59, 130, 246);
+        doc.setFillColor(128, 0, 0);
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(8);
         doc.setFont(undefined, 'bold');
@@ -231,176 +251,176 @@ const filterData = () => {
   };
 
   // Export PDF function with proper header visibility
-const exportToPDF = () => {
-  try {
-    const doc = new jsPDF('landscape');
-    
-    // Title
-    doc.setFontSize(16);
-    doc.setTextColor(40, 40, 40);
-    doc.text("ATTENDANCE HISTORY REPORT", 148, 15, { align: "center" });
-    
-    // Report information
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    
-    const currentDate = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    
-    doc.text(`Generated: ${currentDate}`, 148, 22, { align: "center" });
-    
-    // Filter information
-    let filterInfo = "All Users | All Dates";
-    if (selectedUser || selectedDate) {
-      filterInfo = `${selectedUser ? `User: ${selectedUser}` : 'All Users'} | ${selectedDate ? `Date: ${selectedDate}` : 'All Dates'}`;
-    }
-    
-    doc.text(`Filters: ${filterInfo}`, 148, 28, { align: "center" });
-    doc.text(`Total Records: ${filteredData.length}`, 148, 34, { align: "center" });
+  const exportToPDF = () => {
+    try {
+      const doc = new jsPDF('landscape');
 
-    // Define all columns with proper widths that fit in landscape mode
-    const columns = [
-      { header: 'SALES PERSON', key: 'sales_person_name', width: 28 },
-      { header: 'DATE & TIME', key: 'date_and_time', width: 32 },
-      { header: 'END DATE', key: 'end_date', width: 28 },
-      { header: 'STATUS', key: 'status', width: 18 },
-      { header: 'REASON', key: 'reason', width: 25 },
-      { header: 'LATITUDE', key: 'latitude', width: 22 },
-      { header: 'LONGITUDE', key: 'longitude', width: 22 },
-      { header: 'MAP LINK', key: 'map_link', width: 25 },
-      { header: 'ADDRESS', key: 'address', width: 40 }
-    ];
+      // Title
+      doc.setFontSize(16);
+      doc.setTextColor(40, 40, 40);
+      doc.text("ATTENDANCE HISTORY REPORT", 148, 15, { align: "center" });
 
-    // Calculate total table width
-    const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
-    const pageWidth = doc.internal.pageSize.width;
-    const margin = (pageWidth - totalTableWidth) / 2; // Center the table
+      // Report information
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
 
-    // Table configuration
-    let yPosition = 45;
-    const pageHeight = doc.internal.pageSize.height;
-    const rowHeight = 8;
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
 
-    // Draw table header with better styling
-    doc.setFillColor(59, 130, 246); // Blue background
-    doc.setTextColor(255, 255, 255); // White text
-    doc.setFontSize(8);
-    doc.setFont(undefined, 'bold');
-    
-    let xPosition = margin;
-    
-    // Draw header cells
-    columns.forEach((column) => {
-      // Draw header cell background - BLUE for all headers
-      doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
-      
-      // Draw header text (centered)
-      const textWidth = doc.getTextWidth(column.header);
-      const textX = xPosition + (column.width - textWidth) / 2;
-      doc.text(column.header, textX, yPosition + 5);
-      
-      xPosition += column.width;
-    });
+      doc.text(`Generated: ${currentDate}`, 148, 22, { align: "center" });
 
-    yPosition += rowHeight;
-
-    // Draw table rows
-    doc.setFont(undefined, 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(0, 0, 0);
-
-    filteredData.forEach((record, index) => {
-      // Check if we need a new page
-      if (yPosition > pageHeight - 20) {
-        doc.addPage('landscape');
-        yPosition = 15;
-        
-        // Redraw headers on new page - BLUE background
-        doc.setFillColor(59, 130, 246);
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'bold');
-        
-        xPosition = margin;
-        columns.forEach((column) => {
-          // Draw header cell background - BLUE
-          doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
-          const textWidth = doc.getTextWidth(column.header);
-          const textX = xPosition + (column.width - textWidth) / 2;
-          doc.text(column.header, textX, yPosition + 5);
-          xPosition += column.width;
-        });
-        
-        yPosition += rowHeight;
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(7);
-        doc.setTextColor(0, 0, 0);
+      // Filter information
+      let filterInfo = "All Users | All Dates";
+      if (selectedUser || selectedDate) {
+        filterInfo = `${selectedUser ? `User: ${selectedUser}` : 'All Users'} | ${selectedDate ? `Date: ${selectedDate}` : 'All Dates'}`;
       }
 
-      // Alternate row background for better readability
-      if (index % 2 === 0) {
-        doc.setFillColor(240, 240, 240);
-        xPosition = margin;
-        columns.forEach(column => {
-          doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
-          xPosition += column.width;
-        });
-      }
+      doc.text(`Filters: ${filterInfo}`, 148, 28, { align: "center" });
+      doc.text(`Total Records: ${filteredData.length}`, 148, 34, { align: "center" });
 
-      // Draw row data
-      xPosition = margin;
+      // Define all columns with proper widths that fit in landscape mode
+      const columns = [
+        { header: 'SALES PERSON', key: 'sales_person_name', width: 28 },
+        { header: 'DATE & TIME', key: 'date_and_time', width: 32 },
+        { header: 'END DATE', key: 'end_date', width: 28 },
+        { header: 'STATUS', key: 'status', width: 18 },
+        { header: 'REASON', key: 'reason', width: 25 },
+        { header: 'LATITUDE', key: 'latitude', width: 22 },
+        { header: 'LONGITUDE', key: 'longitude', width: 22 },
+        { header: 'MAP LINK', key: 'map_link', width: 25 },
+        { header: 'ADDRESS', key: 'address', width: 40 }
+      ];
+
+      // Calculate total table width
+      const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+      const pageWidth = doc.internal.pageSize.width;
+      const margin = (pageWidth - totalTableWidth) / 2; // Center the table
+
+      // Table configuration
+      let yPosition = 45;
+      const pageHeight = doc.internal.pageSize.height;
+      const rowHeight = 8;
+
+      // Draw table header with better styling
+      doc.setFillColor(128, 0, 0); // Maroon background
+      doc.setTextColor(255, 255, 255); // White text
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+
+      let xPosition = margin;
+
+      // Draw header cells
       columns.forEach((column) => {
-        let cellValue = record[column.key] || 'N/A';
-        
-        // Format specific fields
-        if (column.key === 'date_and_time' || column.key === 'end_date') {
-          cellValue = formatDateTimeForPDF(cellValue);
-        }
-        
-        if (column.key === 'map_link' && cellValue !== 'N/A') {
-          cellValue = 'View Map';
-        }
+        // Draw header cell background - BLUE for all headers
+        doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
 
-        // Split text to fit in cell
-        const lines = doc.splitTextToSize(cellValue.toString(), column.width - 4);
-        
-        // Draw text
-        doc.text(lines, xPosition + 2, yPosition + 5);
-        
+        // Draw header text (centered)
+        const textWidth = doc.getTextWidth(column.header);
+        const textX = xPosition + (column.width - textWidth) / 2;
+        doc.text(column.header, textX, yPosition + 5);
+
         xPosition += column.width;
       });
 
       yPosition += rowHeight;
-    });
 
-    // Add page numbers
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(
-        `Page ${i} of ${totalPages}`,
-        doc.internal.pageSize.width / 2,
-        doc.internal.pageSize.height - 10,
-        { align: "center" }
-      );
+      // Draw table rows
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(0, 0, 0);
+
+      filteredData.forEach((record, index) => {
+        // Check if we need a new page
+        if (yPosition > pageHeight - 20) {
+          doc.addPage('landscape');
+          yPosition = 15;
+
+          // Redraw headers on new page - BLUE background
+          doc.setFillColor(128, 0, 0);
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(8);
+          doc.setFont(undefined, 'bold');
+
+          xPosition = margin;
+          columns.forEach((column) => {
+            // Draw header cell background - BLUE
+            doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
+            const textWidth = doc.getTextWidth(column.header);
+            const textX = xPosition + (column.width - textWidth) / 2;
+            doc.text(column.header, textX, yPosition + 5);
+            xPosition += column.width;
+          });
+
+          yPosition += rowHeight;
+          doc.setFont(undefined, 'normal');
+          doc.setFontSize(7);
+          doc.setTextColor(0, 0, 0);
+        }
+
+        // Alternate row background for better readability
+        if (index % 2 === 0) {
+          doc.setFillColor(240, 240, 240);
+          xPosition = margin;
+          columns.forEach(column => {
+            doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
+            xPosition += column.width;
+          });
+        }
+
+        // Draw row data
+        xPosition = margin;
+        columns.forEach((column) => {
+          let cellValue = record[column.key] || 'N/A';
+
+          // Format specific fields
+          if (column.key === 'date_and_time' || column.key === 'end_date') {
+            cellValue = formatDateTimeForPDF(cellValue);
+          }
+
+          if (column.key === 'map_link' && cellValue !== 'N/A') {
+            cellValue = 'View Map';
+          }
+
+          // Split text to fit in cell
+          const lines = doc.splitTextToSize(cellValue.toString(), column.width - 4);
+
+          // Draw text
+          doc.text(lines, xPosition + 2, yPosition + 5);
+
+          xPosition += column.width;
+        });
+
+        yPosition += rowHeight;
+      });
+
+      // Add page numbers
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text(
+          `Page ${i} of ${totalPages}`,
+          doc.internal.pageSize.width / 2,
+          doc.internal.pageSize.height - 10,
+          { align: "center" }
+        );
+      }
+
+      // Save the PDF
+      const fileName = `Attendance_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+
+    } catch (error) {
+      console.error("PDF Export Error:", error);
+      alert("Failed to generate PDF. Please try again.");
     }
-
-    // Save the PDF
-    const fileName = `Attendance_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
-
-  } catch (error) {
-    console.error("PDF Export Error:", error);
-    alert("Failed to generate PDF. Please try again.");
-  }
-};
+  };
 
   // Helper function to format date for PDF
   const formatDateTimeForPDF = (timestamp) => {
@@ -419,27 +439,27 @@ const exportToPDF = () => {
     }
   };
 
-const formatDateTime = (timestamp) => {
-  if (!timestamp) return '-';
-  
-  try {
-    const date = new Date(timestamp);
-    
-    // Use local timezone for display
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return '-';
 
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
+    try {
+      const date = new Date(timestamp);
 
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return '-';
-  }
-};
+      // Use local timezone for display
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+
+      return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '-';
+    }
+  };
 
 
   const getStatusColor = (status) => {
@@ -459,7 +479,7 @@ const formatDateTime = (timestamp) => {
         <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-xl shadow-lg p-6">
             <div className="flex justify-center items-center h-32">
-              <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+              <Loader2 className="h-8 w-8 text-[#800000] animate-spin" />
               <span className="ml-3 text-gray-600">Loading attendance data...</span>
             </div>
           </div>
@@ -475,9 +495,9 @@ const formatDateTime = (timestamp) => {
           <div className="bg-white rounded-xl shadow-lg p-6">
             <div className="text-center text-red-600">
               <p>{error}</p>
-              <button 
+              <button
                 onClick={fetchAttendanceData}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="mt-4 px-4 py-2 bg-[#800000] text-white rounded-lg hover:bg-[#990000] transition-colors"
               >
                 Retry
               </button>
@@ -493,23 +513,35 @@ const formatDateTime = (timestamp) => {
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-6 py-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+          <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 sm:px-6 py-4 sm:py-6">
+            <div className="flex flex-row items-center justify-between gap-2">
               <div>
-                <h1 className="text-2xl font-bold text-white mb-2">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-0 md:mb-2">
                   Attendance History
                 </h1>
-                <p className="text-blue-50 hidden md:block">
+                <p className="text-red-50 hidden md:block">
                   View and filter attendance records
                 </p>
               </div>
-              
+              <div>
+                <button
+                  onClick={exportByDateRange}
+                  disabled={exportLoading}
+                  className="px-3 py-1.5 md:px-4 md:py-2.5 bg-white text-[#800000] text-sm md:text-base font-bold rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-1.5 md:gap-2 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {exportLoading ? (
+                    <><Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> <span className="hidden sm:inline">Exporting...</span></>
+                  ) : (
+                    <><Download className="w-4 h-4 md:w-5 md:h-5" /> <span className="hidden sm:inline">Export PDF</span><span className="sm:hidden">Export</span></>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Filters */}
           <div className="bg-gray-50 p-6 border-b border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4 items-end">
               {/* User Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
@@ -519,7 +551,7 @@ const formatDateTime = (timestamp) => {
                 <select
                   value={selectedUser}
                   onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                 >
                   <option value="">All Users</option>
                   {users.map(user => (
@@ -542,20 +574,20 @@ const formatDateTime = (timestamp) => {
             </div>
           </div>
 
-          {/* Export by Date Range */}
+          {/* Date Range Filter */}
           <div className="bg-white p-6 border-b border-gray-200">
             <div className="flex items-center gap-2 mb-4">
-              <Filter className="w-5 h-5 text-indigo-600" />
-              <h3 className="text-lg font-semibold text-gray-800">Export by Date Range</h3>
+              <Filter className="w-5 h-5 text-[#800000]" />
+              <h3 className="text-lg font-semibold text-gray-800">Filter & Export by Date</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4 items-end">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
                 <input
                   type="date"
                   value={exportStartDate}
                   onChange={(e) => setExportStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                 />
               </div>
               <div>
@@ -564,24 +596,8 @@ const formatDateTime = (timestamp) => {
                   type="date"
                   value={exportEndDate}
                   onChange={(e) => setExportEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                 />
-              </div>
-              <div>
-                <button
-                  onClick={exportByDateRange}
-                  disabled={exportLoading}
-                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {exportLoading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Exporting...</>
-                  ) : (
-                    <><Download className="w-4 h-4" /> Export Filtered PDF</>
-                  )}
-                </button>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 italic">To export all the records, leave both of the date fields empty</p>
               </div>
             </div>
           </div>
@@ -597,7 +613,7 @@ const formatDateTime = (timestamp) => {
                   PDF includes: Sales Person, Date & Time, End Date, Status, Reason, Latitude, Longitude, Map Link, Address
                 </p>
               )}
-            </div>
+            </div>  
           </div> */}
 
           {/* Desktop Table View */}
@@ -642,7 +658,7 @@ const formatDateTime = (timestamp) => {
                       <tr key={record.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-[#800000] to-[#b30000] rounded-full flex items-center justify-center">
                               <span className="text-white font-semibold text-sm">
                                 {record.sales_person_name?.charAt(0)?.toUpperCase() || 'U'}
                               </span>
@@ -683,7 +699,7 @@ const formatDateTime = (timestamp) => {
                                 href={record.map_link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm"
+                                className="text-[#800000] hover:text-[#660000] flex items-center gap-1 text-sm"
                               >
                                 <MapPin className="w-4 h-4" />
                                 View Map
@@ -720,7 +736,7 @@ const formatDateTime = (timestamp) => {
                   {/* Header */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-[#800000] to-[#b30000] rounded-full flex items-center justify-center">
                         <span className="text-white font-semibold text-sm">
                           {record.sales_person_name?.charAt(0)?.toUpperCase() || 'U'}
                         </span>
@@ -744,7 +760,7 @@ const formatDateTime = (timestamp) => {
                       <span className="text-gray-500">Start:</span>
                       <span className="text-gray-900 font-medium">{formatDateTime(record.date_and_time)}</span>
                     </div>
-                    
+
                     {record.end_date && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">End:</span>
@@ -766,7 +782,7 @@ const formatDateTime = (timestamp) => {
                           href={record.map_link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm"
+                          className="text-[#800000] hover:text-[#660000] flex items-center gap-1 text-sm"
                         >
                           <Navigation className="w-4 h-4" />
                           View Location on Map

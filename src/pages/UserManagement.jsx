@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Search, 
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Search,
   Filter,
   Eye,
   EyeOff,
@@ -37,20 +37,20 @@ const UserManagement = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Available positions
-  const availablePositions = ["MD", "Sales Head", "Area Sales Manager"];
+  // We will dynamically generate available positions based on users data
 
-  // Available pages for permissions
   const availablePages = [
     "Dashboard",
-    "Dealer Form", 
+    "Dealer Form",
     "Tracker",
     "History",
     "Reports",
     "Attendance",
     "Attendance History",
     "Daily Report",
-    "Admin Logs"
+    "Admin Logs",
+    "Orders",
+    "User Management"
   ];
 
   const [formData, setFormData] = useState({
@@ -58,7 +58,7 @@ const UserManagement = () => {
     sales_person_name: "", // Corrected column name
     password: "",
     role: "User",
-    position: "Area Sales Manager",
+    position: "",
     access: []
   });
 
@@ -92,7 +92,7 @@ const UserManagement = () => {
       sales_person_name: "", // Corrected column name
       password: "",
       role: "User",
-      position: "Area Sales Manager",
+      position: "",
       access: []
     });
     setEditingUser(null);
@@ -138,7 +138,7 @@ const UserManagement = () => {
       sales_person_name: user.sales_person_name || "", // Corrected column name
       password: "", // Don't show existing password
       role: user.role || "User",
-      position: user.position || "Area Sales Manager",
+      position: user.position || "",
       access: user.access ? user.access.split(',').map(p => p.trim()) : []
     });
     setShowModal(true);
@@ -147,7 +147,7 @@ const UserManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       // Convert page array to comma-separated string
       const accessString = formData.access.join(',');
@@ -193,7 +193,13 @@ const UserManagement = () => {
 
         if (error) {
           if (error.code === '23505') { // Unique violation
-            throw new Error("Sales Person Name already exists");
+            if (error.message && error.message.includes('user_name')) {
+              throw new Error("User Name already exists in the database.");
+            } else if (error.message && error.message.includes('sales_person_name')) {
+              throw new Error("Sales Person Name (Full Name) already exists in the database.");
+            } else {
+              throw new Error(`Already exists: ${error.message || 'Duplicate key'}`);
+            }
           }
           throw error;
         }
@@ -214,7 +220,7 @@ const UserManagement = () => {
 
   const handleDelete = async () => {
     if (!userToDelete) return;
-    
+
     try {
       const { error } = await supabase
         .from('master')
@@ -241,7 +247,7 @@ const UserManagement = () => {
   // Filter users based on search, role filter, and position filter
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.sales_person_name?.toLowerCase().includes(searchTerm.toLowerCase()); // Corrected column name
+      user.sales_person_name?.toLowerCase().includes(searchTerm.toLowerCase()); // Corrected column name
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     const matchesPosition = positionFilter === "all" || user.position === positionFilter;
     return matchesSearch && matchesRole && matchesPosition;
@@ -250,7 +256,7 @@ const UserManagement = () => {
   const getRoleColor = (role) => {
     switch (role) {
       case 'Admin': return 'bg-red-100 text-red-800';
-      case 'Manager': return 'bg-blue-100 text-blue-800';
+      case 'Manager': return 'bg-red-100 text-red-800';
       case 'User': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -258,9 +264,9 @@ const UserManagement = () => {
 
   const getPositionColor = (position) => {
     switch (position) {
-      case 'MD': return 'bg-purple-100 text-purple-800';
+      case 'MD': return 'bg-red-100 text-red-800';
       case 'Sales Head': return 'bg-orange-100 text-orange-800';
-      case 'Area Sales Manager': return 'bg-indigo-100 text-indigo-800';
+      case 'Area Sales Manager': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -284,7 +290,7 @@ const UserManagement = () => {
           </span>
         </div>
       </div>
-      
+
       <div className="mb-3">
         <label className="text-xs font-medium text-gray-500 mb-1 block">Access Pages</label>
         <div className="flex flex-wrap gap-1">
@@ -292,7 +298,7 @@ const UserManagement = () => {
             user.access.split(',').slice(0, 3).map((page, index) => (
               <span
                 key={index}
-                className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800"
+                className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-red-100 text-red-800"
               >
                 {page.trim()}
               </span>
@@ -307,7 +313,7 @@ const UserManagement = () => {
           )}
         </div>
       </div>
-      
+
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-1 text-sm text-gray-500">
           <Calendar className="w-3 h-3" />
@@ -316,7 +322,7 @@ const UserManagement = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleEdit(user)}
-            className="text-blue-600 hover:text-blue-900 transition-colors p-1"
+            className="text-[#800000] hover:text-[#660000] transition-colors p-1"
           >
             <Edit className="w-4 h-4" />
           </button>
@@ -349,7 +355,7 @@ const UserManagement = () => {
               <input
                 type="text"
                 placeholder="Search users..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:border-[#800000]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -379,9 +385,9 @@ const UserManagement = () => {
                 suffixIcon={<Briefcase className="w-4 h-4" />}
               >
                 <Option value="all">All Positions</Option>
-                <Option value="MD">MD</Option>
-                <Option value="Sales Head">Sales Head</Option>
-                <Option value="Area Sales Manager">Area Sales Manager</Option>
+                {Array.from(new Set(users.map(u => u.position).filter(Boolean))).map(pos => (
+                  <Option key={pos} value={pos}>{pos}</Option>
+                ))}
               </Select>
             </div>
           </div>
@@ -399,7 +405,7 @@ const UserManagement = () => {
             {/* Add User Button */}
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#800000] text-white rounded-lg hover:bg-[#990000] transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add User</span>
@@ -413,7 +419,7 @@ const UserManagement = () => {
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex justify-center items-center p-8">
-            <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+            <RefreshCw className="w-6 h-6 animate-spin text-[#800000]" />
           </div>
         ) : (
           <>
@@ -447,70 +453,70 @@ const UserManagement = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredUsers.map((user) => (
-  <tr key={`${user.sales_person_name}-${user.user_name}`} className="hover:bg-gray-50">
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="text-sm font-medium text-gray-900">
-        {user.user_name}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <div className="text-sm text-gray-900 font-semibold">
-        {user.sales_person_name}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
-        <Shield className="w-3 h-3 mr-1" />
-        {user.role}
-      </span>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap">
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(user.position)}`}>
-        <Briefcase className="w-3 h-3 mr-1" />
-        {user.position}
-      </span>
-    </td>
-    <td className="px-6 py-4">
-      <div className="flex flex-wrap gap-1 max-w-xs">
-        {user.access ? (
-          user.access.split(',').map((page, index) => (
-            <span
-              key={index}
-              className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800"
-            >
-              {page.trim()}
-            </span>
-          ))
-        ) : (
-          <span className="text-xs text-gray-500">No access</span>
-        )}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-      <div className="flex items-center gap-1">
-        <Calendar className="w-3 h-3" />
-        {new Date(user.created_at).toLocaleDateString()}
-      </div>
-    </td>
-    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => handleEdit(user)}
-          className="text-blue-600 hover:text-blue-900 transition-colors p-1"
-        >
-          <Edit className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => confirmDelete(user)}
-          className="text-red-600 hover:text-red-900 transition-colors p-1"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    </td>
-  </tr>
-))}
+                    {filteredUsers.map((user) => (
+                      <tr key={`${user.sales_person_name}-${user.user_name}`} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
+                            {user.user_name}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900 font-semibold">
+                            {user.sales_person_name}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
+                            <Shield className="w-3 h-3 mr-1" />
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(user.position)}`}>
+                            <Briefcase className="w-3 h-3 mr-1" />
+                            {user.position}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {user.access ? (
+                              user.access.split(',').map((page, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-red-100 text-red-800"
+                                >
+                                  {page.trim()}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-500">No access</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(user.created_at).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEdit(user)}
+                              className="text-[#800000] hover:text-[#660000] transition-colors p-1"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => confirmDelete(user)}
+                              className="text-red-600 hover:text-red-900 transition-colors p-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -519,7 +525,7 @@ const UserManagement = () => {
             {/* Mobile Card View */}
             <div className="lg:hidden p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
               {filteredUsers.map((user) => (
-                <UserCard key={`${user.sales_person_name}-${user.user_name}`} user={user} /> 
+                <UserCard key={`${user.sales_person_name}-${user.user_name}`} user={user} />
               ))}
             </div>
 
@@ -553,14 +559,14 @@ const UserManagement = () => {
             {/* User Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name *
+                User Name*
               </label>
               <input
                 type="text"
                 name="user_name"
                 value={formData.user_name}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:border-[#800000]"
                 required
               />
             </div>
@@ -568,14 +574,14 @@ const UserManagement = () => {
             {/* Sales Person Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Sales Person Name *
+                Full Name*
               </label>
               <input
                 type="text"
-                name="sales_person_name" 
+                name="sales_person_name"
                 value={formData.sales_person_name}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:border-[#800000]"
                 required
               />
             </div>
@@ -591,7 +597,7 @@ const UserManagement = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-10"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:border-[#800000] pr-10"
                   required={!editingUser}
                 />
                 <button
@@ -625,15 +631,14 @@ const UserManagement = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Position *
               </label>
-              <Select
+              <input
+                type="text"
+                name="position"
                 value={formData.position}
-                onChange={(value) => handleSelectChange("position", value)}
-                className="w-full"
-              >
-                <Option value="MD">MD</Option>
-                <Option value="Sales Head">Sales Head</Option>
-                <Option value="Area Sales Manager">Area Sales Manager</Option>
-              </Select>
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:border-[#800000]"
+                required
+              />
             </div>
           </div>
 
@@ -649,7 +654,7 @@ const UserManagement = () => {
                     type="checkbox"
                     checked={formData.access.includes(page)}
                     onChange={() => handlePageSelection(page)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-[#800000] focus:ring-[#800000]"
                   />
                   <span className="text-sm text-gray-700">{page}</span>
                 </label>
@@ -672,7 +677,7 @@ const UserManagement = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-[#800000] text-white rounded-lg hover:bg-[#990000] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
               {isSubmitting && <RefreshCw className="w-4 h-4 animate-spin" />}
               {editingUser ? "Update User" : "Create User"}

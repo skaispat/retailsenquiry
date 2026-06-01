@@ -1,25 +1,31 @@
 "use client";
 
-import React, { useState, useEffect, createContext } from "react";
+import React, { useState, useEffect, createContext, Suspense, lazy } from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";
-import DealerForm from "./pages/DealerForm";
-import History from "./pages/History";
-import Tracker from "./pages/Tracker";
-import Reports from "./pages/Reports";
-import Login from "./pages/Login";
-import Attendance from "./pages/Attendents";
+
 import Sidebar from "./components/Sidebaar";
-import DailyReport from "./pages/Dailyreport";
-import AdminLogs from "./pages/AdminLogs";
-import UserManagement from "./pages/UserManagement"; // Add this import
+import Navbar from "./components/Navbar";
 import supabase from "./SupaabseClient";
-import AttendanceHistoryPage from "./pages/AttendanceHistoryPage";
+import ErrorBoundary from "./components/ErrorBoundary";
+
+// Lazy-loaded pages
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const DealerForm = lazy(() => import("./pages/DealerForm"));
+const History = lazy(() => import("./pages/History"));
+const Tracker = lazy(() => import("./pages/Tracker"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Login = lazy(() => import("./pages/Login"));
+const Attendance = lazy(() => import("./pages/Attendents"));
+const DailyReport = lazy(() => import("./pages/Dailyreport"));
+const AdminLogs = lazy(() => import("./pages/AdminLogs"));
+const UserManagement = lazy(() => import("./pages/UserManagement"));
+const Orders = lazy(() => import("./pages/Orders"));
+const AttendanceHistoryPage = lazy(() => import("./pages/AttendanceHistoryPage"));
 
 export const AuthContext = createContext(null);
 
@@ -29,6 +35,7 @@ const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userType, setUserType] = useState(null);
   const [tabs, setTabs] = useState([]);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
@@ -79,7 +86,7 @@ const App = () => {
           console.error("Error logging login activity:", error);
           // Don't throw error, just log it
         } else {
-          console.log("Login activity logged successfully");
+          // console.log("Login activity logged successfully");
         }
       } else if (action === 'logout') {
         // Update the most recent login record without logout time
@@ -97,7 +104,7 @@ const App = () => {
         if (error) {
           console.error("Error logging logout activity:", error);
         } else {
-          console.log("Logout activity logged successfully");
+          // console.log("Logout activity logged successfully");
         }
       }
     } catch (error) {
@@ -155,7 +162,7 @@ const App = () => {
               "Attendance History",
               "Daily Report",
               "User Management",
-              ...(userIsAdmin ? ["Admin Logs"] : [])
+              ...(userIsAdmin ? ["Admin Logs", "Orders"] : [])
             ]
             : (data.access || "").split(",").map((t) => t.trim()).filter(Boolean),
         };
@@ -277,7 +284,7 @@ const App = () => {
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6">
                     <p className="text-lg font-medium text-gray-700">
                       Hello, <span className="font-bold text-blue-600">
-                        {currentUser.role.toLowerCase() === "admin" ? "Abhishek Agrawal (MD)" : currentUser.salesPersonName}
+                        {currentUser.salesPersonName}
                       </span>!
                     </p>
                     <p className="text-sm text-gray-500 mt-1">
@@ -297,10 +304,11 @@ const App = () => {
           {isAuthenticated && (
             <div className=" md:fixed md:inset-y-0 md:left-0 md:w-64 md:bg-gray-800 md:text-white md:z-20 md:shadow-lg">
               <Sidebar
-                logout={logout}
                 userType={userType}
                 username={currentUser?.username}
                 tabs={tabs}
+                isMobileOpen={isMobileSidebarOpen}
+                onMobileClose={() => setIsMobileSidebarOpen(false)}
               />
             </div>
           )}
@@ -310,6 +318,16 @@ const App = () => {
             className={`flex flex-col flex-1 overflow-hidden ${isAuthenticated ? "md:ml-64" : ""
               }`}
           >
+            {isAuthenticated && (
+              <Navbar
+                toggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+                salesPersonName={currentUser?.salesPersonName}
+                userType={currentUser?.position}
+                isAdmin={isAdmin()}
+                onLogout={logout}
+              />
+            )}
+
             {/* Notification bar */}
             {notification && (
               <div
@@ -325,95 +343,118 @@ const App = () => {
             )}
 
             {/* Scrollable Content Area */}
-            <div className="sm:mt-0 mt-12 flex-1 min-h-0 overflow-y-auto px-2 sm:px-6 py-4 flex flex-col justify-between">
-              <div className="mb-5">
-                <Routes>
-                  <Route
-                    path="/login"
-                    element={!isAuthenticated ? <Login /> : <Navigate to="/" />}
-                  />
-                  <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dealer-form"
-                    element={
-                      <ProtectedRoute>
-                        <DealerForm />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/tracker"
-                    element={
-                      <ProtectedRoute>
-                        <Tracker />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/history"
-                    element={
-                      <ProtectedRoute>
-                        <History />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/reports"
-                    element={
-                      <ProtectedRoute>
-                        <Reports />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/attendance"
-                    element={
-                      <ProtectedRoute>
-                        <Attendance />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/attendance-history"
-                    element={
-                      <ProtectedRoute>
-                        <AttendanceHistoryPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/daily-report"
-                    element={
-                      <ProtectedRoute>
-                        <DailyReport />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/user-management"
-                    element={
-                      <ProtectedRoute adminOnly={true}>
-                        <UserManagement />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin-logs"
-                    element={
-                      <ProtectedRoute adminOnly={true}>
-                        <AdminLogs />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="*" element={<Navigate to="/" />} />
-                </Routes>
+            <div className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-6 py-4 flex flex-col justify-between">
+              <div className="mb-5 relative">
+                <ErrorBoundary>
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center min-h-[50vh]">
+                      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#800000]"></div>
+                    </div>
+                  }>
+                    <Routes>
+                      <Route
+                        path="/login"
+                        element={!isAuthenticated ? <Login /> : <Navigate to="/" />}
+                      />
+                      <Route
+                        path="/"
+                        element={
+                          <ProtectedRoute>
+                            <Dashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/dealer-form"
+                        element={
+                          <ProtectedRoute>
+                            <DealerForm />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/tracker"
+                        element={
+                          <ProtectedRoute>
+                            <Tracker />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/history"
+                        element={
+                          <ProtectedRoute>
+                            <History />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/reports"
+                        element={
+                          <ProtectedRoute>
+                            <Reports />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/attendance"
+                        element={
+                          <ProtectedRoute>
+                            <Attendance />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/attendance-history"
+                        element={
+                          <ProtectedRoute>
+                            <AttendanceHistoryPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/daily-report"
+                        element={
+                          <ProtectedRoute>
+                            <DailyReport />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      {/* Admin Only Routes */}
+                      <Route
+                        path="/admin-logs"
+                        element={
+                          <ProtectedRoute adminOnly={true}>
+                            <AdminLogs />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/orders"
+                        element={
+                          <ProtectedRoute adminOnly={true}>
+                            <Orders />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/user-management"
+                        element={
+                          <ProtectedRoute adminOnly={true}>
+                            <UserManagement />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      {/* Catch all route - redirect to dashboard or login */}
+                      <Route
+                        path="*"
+                        element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />}
+                      />
+                    </Routes>
+                  </Suspense>
+                </ErrorBoundary>
               </div>
               {/* Footer */}
               <footer className="mt-auto py-0 text-center border-t border-slate-100">

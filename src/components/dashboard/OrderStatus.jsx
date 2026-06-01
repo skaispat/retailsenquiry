@@ -182,16 +182,16 @@ function OrderStatus({ filteredData, FMS_COLUMNS_INFO }) {
     const newStatusData = [];
 
     if (completed > 0) {
-        newStatusData.push({ name: "Completed", value: completed, color: "#10b981" });
+        newStatusData.push({ name: "Completed", value: completed, color: "#5C0000" });
     }
     if (pending > 0) {
-        newStatusData.push({ name: "Pending", value: pending, color: "#f59e0b" });
+        newStatusData.push({ name: "Pending", value: pending, color: "#8A0000" });
     }
     if (cancelled > 0) {
-        newStatusData.push({ name: "Cancelled", value: cancelled, color: "#ef4444" });
+        newStatusData.push({ name: "Cancelled", value: cancelled, color: "#B80000" });
     }
     if (other > 0) {
-        newStatusData.push({ name: "Other", value: other, color: "#6b7280" }); // A neutral color for 'Other'
+        newStatusData.push({ name: "Other", value: other, color: "#330000" }); // A neutral color for 'Other'
     }
 
     // Handle case where no relevant statuses are found in the filtered data
@@ -206,9 +206,9 @@ function OrderStatus({ filteredData, FMS_COLUMNS_INFO }) {
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-8 py-6">
+      <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-8 py-6">
         <h3 className="md:text-2xl font-bold text-white mb-2">Order Status</h3>
-        <p className="text-purple-50 md:text-lg">
+        <p className="text-red-50 md:text-lg">
           Current distribution of order statuses
         </p>
       </div>

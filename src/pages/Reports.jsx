@@ -132,12 +132,12 @@ const Reports = () => {
       setError(null);
 
       if (!isAuthenticated) {
-        console.log("Not authenticated. Skipping data fetch.");
+        // console.log("Not authenticated. Skipping data fetch.");
         setIsLoading(false);
         return;
       }
 
-      console.log("🔄 Fetching data from Supabase FMS table...");
+      // console.log("🔄 Fetching data from Supabase FMS table...");
 
       const { data, error } = await supabase
         .from('FMS')
@@ -168,7 +168,7 @@ const Reports = () => {
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      console.log("✅ FMS data loaded successfully from Supabase");
+      // console.log("✅ FMS data loaded successfully from Supabase");
 
       const fmsHeaders = [
         { id: 'sales_person_name', label: 'Sales Person Name' },
@@ -542,40 +542,32 @@ const Reports = () => {
   return (
     <>
       <Toaster position="top-right" />
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-4 lg:p-8">
-        <div className="max-w-7xl mx-auto space-y-8">
+      <div className="w-full bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 p-0 sm:p-4 lg:p-8 rounded-xl">
+        <div className="max-w-7xl mx-auto flex flex-col">
           {/* Main Card */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl md:rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col">
             {/* Header Section */}
-            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-6 lg:px-8">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="text-center lg:text-left">
-                  <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
+            <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 py-6 lg:px-8">
+              <div className="flex flex-row items-center justify-between gap-2 lg:gap-4">
+                <div className="text-left">
+                  <h3 className="text-lg lg:text-2xl font-bold text-white mb-0">
                     Dealer Performance Report
                   </h3>
-                  <p className="text-orange-50 text-sm lg:text-lg hidden md:block">
-                    Comprehensive view of all dealers and their performance metrics
-                  </p>
-                  <p className="text-orange-100 text-xs lg:text-sm mt-2 hidden md:block">
-                    Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
-                  </p>
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="flex flex-row items-center justify-end gap-2 lg:gap-3">
                   {/* Mobile Filter Toggle */}
                   {isMobile && (
-                    <div className="relative">
-                      <button
-                        onClick={() => setIsFilterOpen(!isFilterOpen)}
-                        className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 flex items-center gap-2"
-                      >
-                        <Filter className="h-4 w-4" />
-                        Filters
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setIsFilterOpen(!isFilterOpen)}
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 lg:py-2 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-1 lg:gap-2 text-sm lg:text-base"
+                    >
+                      <Filter className="h-4 w-4" />
+                      <span className="hidden sm:inline">Filters</span>
+                    </button>
                   )}
                   <button
                     onClick={exportData}
-                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm lg:text-base"
+                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 lg:py-2 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-1 lg:gap-2 text-sm lg:text-base"
                   >
                     <Download className="h-4 w-4" />
                     <span className="hidden sm:inline">Export</span>
@@ -594,7 +586,7 @@ const Reports = () => {
                     <input
                       type="search"
                       placeholder="Search dealers..."
-                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -608,7 +600,7 @@ const Reports = () => {
                     <select
                       value={salesPersonFilter}
                       onChange={(e) => setSalesPersonFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Sales Persons</option>
                       {uniqueSalesPersons.map(person => (
@@ -625,7 +617,7 @@ const Reports = () => {
                     <select
                       value={dealerNameFilter}
                       onChange={(e) => setDealerNameFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Dealers</option>
                       {uniqueDealerNames.map(dealer => (
@@ -642,7 +634,7 @@ const Reports = () => {
                     <select
                       value={lastActionFilter}
                       onChange={(e) => setLastActionFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Actions</option>
                       {uniqueLastActions.map(action => (
@@ -661,7 +653,7 @@ const Reports = () => {
                     <input
                       type="search"
                       placeholder="Search dealers..."
-                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -671,7 +663,7 @@ const Reports = () => {
                     <select
                       value={salesPersonFilter}
                       onChange={(e) => setSalesPersonFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Sales Persons</option>
                       {uniqueSalesPersons.map(person => (
@@ -684,7 +676,7 @@ const Reports = () => {
                     <select
                       value={dealerNameFilter}
                       onChange={(e) => setDealerNameFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Dealers</option>
                       {uniqueDealerNames.map(dealer => (
@@ -697,7 +689,7 @@ const Reports = () => {
                     <select
                       value={lastActionFilter}
                       onChange={(e) => setLastActionFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Actions</option>
                       {uniqueLastActions.map(action => (
@@ -715,7 +707,7 @@ const Reports = () => {
                   <input
                     type="search"
                     placeholder="Search dealers..."
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />

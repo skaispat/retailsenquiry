@@ -190,7 +190,7 @@ const Attendance = () => {
   // Fetch attendance history from Supabase
   const fetchAttendanceHistory = async () => {
     if (!isAuthenticated || !currentUser) {
-      console.log("Not authenticated or currentUser not available. Skipping history fetch.");
+      // console.log("Not authenticated or currentUser not available. Skipping history fetch.");
       setIsLoadingHistory(false);
       return;
     }
@@ -212,9 +212,9 @@ const Attendance = () => {
       const tomorrowDay = String(tomorrow.getDate()).padStart(2, '0');
       const tomorrowString = `${tomorrowYear}-${tomorrowMonth}-${tomorrowDay}`;
 
-      console.log("Fetching today's attendance data...");
-      console.log("Today start:", `${todayString}T00:00:00`);
-      console.log("Today end:", `${tomorrowString}T00:00:00`);
+      // console.log("Fetching today's attendance data...");
+      // console.log("Today start:", `${todayString}T00:00:00`);
+      // console.log("Today end:", `${tomorrowString}T00:00:00`);
 
       // Fetch only today's attendance records
       const { data, error } = await supabase
@@ -228,8 +228,8 @@ const Attendance = () => {
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      console.log("✅ Today's attendance data loaded successfully from Supabase");
-      console.log("Raw data count:", data?.length);
+      // console.log("✅ Today's attendance data loaded successfully from Supabase");
+      // console.log("Raw data count:", data?.length);
 
       // Format the data for display
       const formattedHistory = data.map((item) => {
@@ -246,7 +246,7 @@ const Attendance = () => {
         };
       });
 
-      console.log("Formatted history count:", formattedHistory.length);
+      // console.log("Formatted history count:", formattedHistory.length);
 
       // Filter based on user role - show all for admin, only current user for others
       const filteredHistory =
@@ -256,7 +256,7 @@ const Attendance = () => {
             (entry) => entry.salesPersonName === salesPersonName
           );
 
-      console.log("Filtered history count:", filteredHistory.length);
+      // console.log("Filtered history count:", filteredHistory.length);
       setAttendance(filteredHistory);
 
       // For form validation - filter for current user's today data
@@ -264,7 +264,7 @@ const Attendance = () => {
         (entry) => entry.salesPersonName === salesPersonName
       );
 
-      console.log("Current user's today data:", filteredHistoryData);
+      // console.log("Current user's today data:", filteredHistoryData);
       setAttendanceData(filteredHistoryData);
 
     } catch (error) {
@@ -282,7 +282,7 @@ const Attendance = () => {
   // Submit attendance to Supabase
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Submit button clicked!");
+    // console.log("Submit button clicked!");
 
     if (!validateForm()) {
       showToast("Please fill in all required fields correctly.", "error");
@@ -294,7 +294,7 @@ const Attendance = () => {
       return;
     }
 
-    console.log("Today's attendance data:", attendanceData);
+    // console.log("Today's attendance data:", attendanceData);
 
     // Check for duplicate IN/OUT entries for today
     if (formData?.status === "IN") {
@@ -325,7 +325,7 @@ const Attendance = () => {
       let currentLocation = null;
       try {
         currentLocation = await getCurrentLocation();
-        console.log("Location captured:", currentLocation);
+        // console.log("Location captured:", currentLocation);
       } catch (locationError) {
         console.error("Location error:", locationError);
         showToast(locationError.message, "error");
@@ -356,7 +356,7 @@ const Attendance = () => {
         attendanceRecord.reason = formData.reason;
       }
 
-      console.log("Attendance record to be submitted:", attendanceRecord);
+      // console.log("Attendance record to be submitted:", attendanceRecord);
 
       // Insert into Supabase
       const { data, error } = await supabase
@@ -412,7 +412,7 @@ const Attendance = () => {
 
   if (!isAuthenticated || !currentUser || !currentUser.salesPersonName) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
           <p className="text-slate-600 font-medium">
@@ -426,22 +426,16 @@ const Attendance = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-0 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-8 py-6">
-            <h3 className="text-2xl font-bold text-white mb-2">
+    <div className="w-full bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 p-0 sm:p-4 lg:p-8 rounded-xl">
+      <div className="max-w-7xl mx-auto flex flex-col gap-8">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl md:rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col">
+          <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 md:px-8 py-4 md:py-6">
+            <h3 className="text-lg md:text-2xl font-bold text-white">
               Mark Attendance
             </h3>
-            <p className="text-emerald-50 text-lg hidden md:block">
-              Record your daily attendance or apply for leave
-            </p>
-            <p className="text-orange-100 text-sm mt-2 hidden md:block">
-              Current User: <span className="font-semibold">{salesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
-            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8 p-8">
+          <form onSubmit={handleSubmit} className="space-y-8 p-4 md:p-8">
             <div className="grid gap-6 lg:grid-cols-1">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-slate-700 mb-3">

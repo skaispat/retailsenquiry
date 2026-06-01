@@ -69,7 +69,7 @@ function DealerForm() {
     "15_ZUjQA-cSyFMt-70BxPBWVUZ185ioQzTqt5ElWXaZk";
 
   const DEFAULT_DEALER_SIZES = ["Small", "Medium", "Large"];
-  
+
   // Site Nature options for Site/Engineer
   const SITE_NATURE_OPTIONS = [
     "Individual House",
@@ -87,7 +87,7 @@ function DealerForm() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
       );
       const data = await response.json();
-      
+
       if (data && data.display_name) {
         return data.display_name;
       }
@@ -160,25 +160,25 @@ function DealerForm() {
       img.onload = () => {
         canvas.width = img.width;
         canvas.height = img.height;
-        
+
         // Draw original image
         ctx.drawImage(img, 0, 0);
-        
+
         // Add location watermark
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(10, canvas.height - 100, canvas.width - 20, 90);
-        
+
         ctx.fillStyle = 'white';
         ctx.font = '14px Arial';
         ctx.textAlign = 'left';
-        
+
         const locationText = [
           `📍 ${location.formattedAddress}`,
           `📱 Lat: ${location.latitude.toFixed(6)}, Lng: ${location.longitude.toFixed(6)}`,
           `🕒 ${new Date(location.timestamp).toLocaleString()}`,
           `🎯 Accuracy: ${Math.round(location.accuracy)}m`
         ];
-        
+
         locationText.forEach((text, index) => {
           ctx.fillText(text, 20, canvas.height - 70 + (index * 20));
         });
@@ -207,33 +207,33 @@ function DealerForm() {
       // Step 1: Show preview immediately
       const previewUrl = URL.createObjectURL(file);
       setPhotoPreview(previewUrl);
-      
+
       // Step 2: Show location capture in progress
       setIsCapturingLocation(true);
 
       // Step 3: Capture location
       const location = await getCurrentLocation();
       setPhotoLocation(location);
-      
+
       // Step 4: Add location watermark to image
       const processedImage = await addLocationWatermark(file, location);
-      
+
       // Step 5: Update form data with processed image
       setFormData(prev => ({
         ...prev,
         photo: processedImage
       }));
-      
+
       // Update preview with processed image
       const processedPreviewUrl = URL.createObjectURL(processedImage);
       setPhotoPreview(processedPreviewUrl);
-      
+
       return { location, processedImage };
-      
+
     } catch (error) {
       console.error("Photo processing failed:", error);
       setPhotoLocation(null);
-      
+
       // If location fails, still keep the original photo
       setFormData(prev => ({
         ...prev,
@@ -250,13 +250,13 @@ function DealerForm() {
    */
   const handleFileUpload = async (file) => {
     if (!file) return;
-    
+
     // Check if file is an image
     if (!file.type.startsWith('image/')) {
       showToast("❌ Please select an image file", "error");
       return;
     }
-    
+
     await processPhotoWithLocation(file);
   };
 
@@ -267,7 +267,7 @@ function DealerForm() {
     try {
       setCameraError("");
       setIsCameraLoading(true);
-      
+
       // Check if camera is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setCameraError("Camera not supported on this device");
@@ -276,22 +276,22 @@ function DealerForm() {
       }
 
       // Request camera access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
           facingMode: 'environment', // Prefer rear camera
           width: { ideal: 1280 },
           height: { ideal: 720 }
         },
         audio: false
       });
-      
+
       setCameraStream(stream);
       setIsCameraOpen(true);
-      
+
       // Wait for video to be ready
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        
+
         // Wait for video to load
         await new Promise((resolve) => {
           if (videoRef.current) {
@@ -300,11 +300,11 @@ function DealerForm() {
             };
           }
         });
-        
+
         // Play the video
         await videoRef.current.play();
       }
-      
+
     } catch (error) {
       console.error("Camera error:", error);
       if (error.name === 'NotAllowedError') {
@@ -363,7 +363,7 @@ function DealerForm() {
             type: 'image/jpeg'
           });
 
-          console.log("Photo captured successfully, file size:", blob.size);
+          // console.log("Photo captured successfully, file size:", blob.size);
 
           // Stop camera first
           stopCamera();
@@ -395,7 +395,7 @@ function DealerForm() {
       const fileName = `${timestamp}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
       const filePath = `site-engineer-photos/${fileName}`;
 
-      console.log("Uploading photo to Supabase storage...");
+      // console.log("Uploading photo to Supabase storage...");
 
       // Upload file to Supabase storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -406,14 +406,14 @@ function DealerForm() {
         throw new Error(`Photo upload failed: ${uploadError.message}`);
       }
 
-      console.log("Photo uploaded successfully:", uploadData);
+      // console.log("Photo uploaded successfully:", uploadData);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('image')
         .getPublicUrl(filePath);
 
-      console.log("Public URL generated:", publicUrl);
+      // console.log("Public URL generated:", publicUrl);
 
       return publicUrl;
 
@@ -453,7 +453,7 @@ function DealerForm() {
     setPhotoPreview(null);
     setPhotoLocation(null);
     setFormData(prev => ({ ...prev, photo: null }));
-    
+
     // Clear the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -463,91 +463,91 @@ function DealerForm() {
   /**
    * Fetches master data for dealer sizes from the specified Google Sheet.
    */
-const fetchMasterDataForDealerSizes = async () => {
-  setIsLoadingDealerSizes(true);
-  setErrorDealerSizes(null);
-  try {
-    // Fetch from Supabase table 'dropdown' where dealer_size is not null
-    const { data, error } = await supabase
-      .from('dropdown')
-      .select('dealer_size')
-      .not('dealer_size', 'is', null)
-      .order('dealer_size');
+  const fetchMasterDataForDealerSizes = async () => {
+    setIsLoadingDealerSizes(true);
+    setErrorDealerSizes(null);
+    try {
+      // Fetch from Supabase table 'dropdown' where dealer_size is not null
+      const { data, error } = await supabase
+        .from('dropdown')
+        .select('dealer_size')
+        .not('dealer_size', 'is', null)
+        .order('dealer_size');
 
-    if (error) {
-      throw new Error(`Failed to fetch MASTER data: ${error.message}`);
+      if (error) {
+        throw new Error(`Failed to fetch MASTER data: ${error.message}`);
+      }
+
+      let dealerSizes = [];
+
+      if (data && data.length > 0) {
+        dealerSizes = data
+          .map((row) => {
+            const value = row.dealer_size ? String(row.dealer_size).trim() : "";
+            return value;
+          })
+          .filter((size) => {
+            const lowerCaseSize = size.toLowerCase();
+            return (
+              size &&
+              !["dealer size", "dealersize", "size"].includes(lowerCaseSize) &&
+              !lowerCaseSize.startsWith("date(")
+            );
+          });
+      }
+
+      const uniqueDealerSizes = Array.from(new Set(dealerSizes));
+      setFetchedDealerSizes(
+        uniqueDealerSizes.length > 0 ? uniqueDealerSizes : DEFAULT_DEALER_SIZES
+      );
+
+    } catch (err) {
+      console.error(`Error fetching MASTER data for dealer sizes:`, err);
+      setErrorDealerSizes(`Failed to load dealer sizes: ${err.message}`);
+      setFetchedDealerSizes(DEFAULT_DEALER_SIZES);
+    } finally {
+      setIsLoadingDealerSizes(false);
     }
+  };
 
-    let dealerSizes = [];
-    
-    if (data && data.length > 0) {
-      dealerSizes = data
-        .map((row) => {
-          const value = row.dealer_size ? String(row.dealer_size).trim() : "";
-          return value;
-        })
-        .filter((size) => {
-          const lowerCaseSize = size.toLowerCase();
-          return (
-            size &&
-            !["dealer size", "dealersize", "size"].includes(lowerCaseSize) &&
-            !lowerCaseSize.startsWith("date(")
-          );
-        });
+  const fetchSalesPersons = async () => {
+    setIsLoadingSalesPersons(true);
+    setErrorSalesPersons(null);
+    try {
+      // Option 1: Using .not() method (as shown above)
+      const { data, error } = await supabase
+        .from('master')
+        .select('sales_person_name')
+        .not('sales_person_name', 'is', null);
+
+
+      if (error) throw error;
+
+      let salesPersons = [];
+
+      if (data && data.length > 0) {
+        salesPersons = data
+          .map(row => row.sales_person_name?.trim() || "")
+          .filter(name => {
+            const lowerName = name.toLowerCase();
+            return name &&
+              lowerName !== "salesperson name" &&
+              !lowerName.startsWith("date(");
+          });
+      }
+
+      // Remove duplicates, sort alphabetically
+      const uniqueSalesPersons = [...new Set(salesPersons)].sort();
+      setFetchedSalesPersons(uniqueSalesPersons);
+
+    } catch (err) {
+      console.error('Error fetching sales persons:', err);
+      setErrorSalesPersons(err.message);
+      setFetchedSalesPersons([]);
+    } finally {
+      setIsLoadingSalesPersons(false);
     }
-
-    const uniqueDealerSizes = Array.from(new Set(dealerSizes));
-    setFetchedDealerSizes(
-      uniqueDealerSizes.length > 0 ? uniqueDealerSizes : DEFAULT_DEALER_SIZES
-    );
-    
-  } catch (err) {
-    console.error(`Error fetching MASTER data for dealer sizes:`, err);
-    setErrorDealerSizes(`Failed to load dealer sizes: ${err.message}`);
-    setFetchedDealerSizes(DEFAULT_DEALER_SIZES);
-  } finally {
-    setIsLoadingDealerSizes(false);
-  }
-};
-
-const fetchSalesPersons = async () => {
-  setIsLoadingSalesPersons(true);
-  setErrorSalesPersons(null);
-  try {
-    // Option 1: Using .not() method (as shown above)
-    const { data, error } = await supabase
-      .from('master')
-      .select('sales_person_name')
-      .not('sales_person_name', 'is', null);
-
-
-    if (error) throw error;
-
-    let salesPersons = [];
-    
-    if (data && data.length > 0) {
-      salesPersons = data
-        .map(row => row.sales_person_name?.trim() || "")
-        .filter(name => {
-          const lowerName = name.toLowerCase();
-          return name && 
-                 lowerName !== "salesperson name" &&
-                 !lowerName.startsWith("date(");
-        });
-    }
-
-    // Remove duplicates, sort alphabetically
-    const uniqueSalesPersons = [...new Set(salesPersons)].sort();
-    setFetchedSalesPersons(uniqueSalesPersons);
-    
-  } catch (err) {
-    console.error('Error fetching sales persons:', err);
-    setErrorSalesPersons(err.message);
-    setFetchedSalesPersons([]);
-  } finally {
-    setIsLoadingSalesPersons(false);
-  }
-};
+  };
 
   // useEffect hook to fetch initial data and set up auto-fill/dropdown
   useEffect(() => {
@@ -610,7 +610,7 @@ const fetchSalesPersons = async () => {
         [name]: value,
       }));
     }
-    
+
     // Clear error for the field if it was previously set
     if (errors[name]) {
       setErrors((prev) => ({
@@ -657,166 +657,166 @@ const fetchSalesPersons = async () => {
   /**
    * Handles the form submission.
    */
-/**
- * Handles the form submission.
- */
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!validateForm()) {
-    showToast("❌ Please correct the errors in the form.", "error");
-    return;
-  }
+  /**
+   * Handles the form submission.
+   */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) {
+      showToast("❌ Please correct the errors in the form.", "error");
+      return;
+    }
 
-  setIsSubmitting(true);
-  try {
-    const date = new Date().toISOString();
+    setIsSubmitting(true);
+    try {
+      const date = new Date().toISOString();
 
-    const formattedDob = formData.dob
-      ? new Date(formData.dob).toISOString()
-      : null;
-    const formattedAnniversary = formData.anniversary
-      ? new Date(formData.anniversary).toISOString()
-      : null;
+      const formattedDob = formData.dob
+        ? new Date(formData.dob).toISOString()
+        : null;
+      const formattedAnniversary = formData.anniversary
+        ? new Date(formData.anniversary).toISOString()
+        : null;
 
-    // Upload photo and get URL (for Site/Engineer only)
-    let photoUrl = null;
-    let locationData = null;
+      // Upload photo and get URL (for Site/Engineer only)
+      let photoUrl = null;
+      let locationData = null;
 
-    if (formData.photo && entityType === "Site/Engineer") {
-      // For Site/Engineer: Use the location already captured during photo processing
-      photoUrl = await uploadPhotoToSupabase(formData.photo);
-      console.log("Photo uploaded successfully:", photoUrl);
-      
-      // Use the location that was already captured with the photo
-      // BUT we need to ensure it's available and fresh
-      if (photoLocation) {
-        locationData = photoLocation;
-        console.log("Using photo location for Site/Engineer:", locationData);
+      if (formData.photo && entityType === "Site/Engineer") {
+        // For Site/Engineer: Use the location already captured during photo processing
+        photoUrl = await uploadPhotoToSupabase(formData.photo);
+        // console.log("Photo uploaded successfully:", photoUrl);
+
+        // Use the location that was already captured with the photo
+        // BUT we need to ensure it's available and fresh
+        if (photoLocation) {
+          locationData = photoLocation;
+          // console.log("Using photo location for Site/Engineer:", locationData);
+        } else {
+          // If photoLocation is not available, capture location now
+          console.warn("Photo location not found, capturing fresh location...");
+          try {
+            locationData = await getCurrentLocation();
+            // console.log("Fresh location captured for Site/Engineer:", locationData);
+          } catch (locationError) {
+            console.warn("Could not capture location for Site/Engineer:", locationError);
+          }
+        }
       } else {
-        // If photoLocation is not available, capture location now
-        console.warn("Photo location not found, capturing fresh location...");
+        // For Dealer/Distributor: Capture location now
         try {
+          // console.log("Capturing location for", entityType, "...");
           locationData = await getCurrentLocation();
-          console.log("Fresh location captured for Site/Engineer:", locationData);
+          // console.log("Location captured for", entityType + ":", locationData);
         } catch (locationError) {
-          console.warn("Could not capture location for Site/Engineer:", locationError);
+          console.warn("Could not capture location for", entityType + ":", locationError);
         }
       }
-    } else {
-      // For Dealer/Distributor: Capture location now
-      try {
-        console.log("Capturing location for", entityType, "...");
-        locationData = await getCurrentLocation();
-        console.log("Location captured for", entityType + ":", locationData);
-      } catch (locationError) {
-        console.warn("Could not capture location for", entityType + ":", locationError);
+
+      // Supabase insert data object - includes longitude and latitude for ALL entities
+      const insertData = {
+        state_name: formData.stateName,
+        district_name: formData.districtName,
+        area_name: formData.areaName,
+        sales_person_name: formData.salesPersonName,
+        dealer_name: formData.dealerName,
+        about_dealer: formData.aboutDealer,
+        address: formData.address,
+        contact_number: formData.contactNumber,
+        email_address: formData.emailAddress,
+        planned: date,
+        image_url: photoUrl || null,
+        dealer_size: formData.dealerSize || formData.siteNature,
+        avg_qty: formData.avgQty,
+        select_value: entityType,
+        // Add longitude and latitude to the database for ALL entities
+        ...(locationData && {
+          longitude: locationData.longitude,
+          latitude: locationData.latitude,
+
+        }),
+        ...(entityType !== "Site/Engineer" && {
+          date_of_birth: formattedDob,
+          anniversary: formattedAnniversary,
+        }),
+      };
+
+      // console.log("Submitting data to Supabase for", entityType + ":", {
+      //   ...insertData,
+      //   hasLocation: !!locationData,
+      //   coordinates: locationData ? `${locationData.latitude}, ${locationData.longitude}` : 'None'
+      // });
+
+      // Supabase insert call
+      const { data, error } = await supabase
+        .from('FMS')
+        .insert([insertData])
+        .select();
+
+      if (error) {
+        throw error;
       }
+
+      // Show success message with location status
+      const successMessage = locationData
+        ? `✅ ${entityType} registered successfully with location!`
+        : `✅ ${entityType} registered successfully! (Location unavailable)`;
+
+      showToast(successMessage);
+
+      // Reset form data after successful submission
+      setFormData({
+        stateName: "",
+        districtName: "",
+        areaName: "",
+        salesPersonName:
+          userRole === "User" && currentUser?.salesPersonName
+            ? currentUser.salesPersonName
+            : "",
+        dealerName: "",
+        aboutDealer: "",
+        address: "",
+        dealerSize: "",
+        avgQty: "",
+        contactNumber: "",
+        emailAddress: "",
+        dob: "",
+        anniversary: "",
+        siteNature: "",
+        photo: null,
+      });
+
+      // Reset photo data and clear file input
+      resetPhotoData();
+      setErrors({});
+
+    } catch (error) {
+      console.error("Submission error:", error);
+      showToast(`❌ Error submitting form: ${error.message}`, "error");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Supabase insert data object - includes longitude and latitude for ALL entities
-    const insertData = {
-      state_name: formData.stateName,
-      district_name: formData.districtName,
-      area_name: formData.areaName,
-      sales_person_name: formData.salesPersonName,
-      dealer_name: formData.dealerName,
-      about_dealer: formData.aboutDealer,
-      address: formData.address,
-      contact_number: formData.contactNumber,
-      email_address: formData.emailAddress,
-      planned: date,
-      image_url: photoUrl || null,
-      dealer_size: formData.dealerSize || formData.siteNature, 
-      avg_qty: formData.avgQty,
-      select_value: entityType,
-      // Add longitude and latitude to the database for ALL entities
-      ...(locationData && {
-        longitude: locationData.longitude,
-        latitude: locationData.latitude,
-       
-      }),
-      ...(entityType !== "Site/Engineer" && {
-        date_of_birth: formattedDob,
-        anniversary: formattedAnniversary,
-      }),
-    };
-
-    console.log("Submitting data to Supabase for", entityType + ":", {
-      ...insertData,
-      hasLocation: !!locationData,
-      coordinates: locationData ? `${locationData.latitude}, ${locationData.longitude}` : 'None'
-    });
-    
-    // Supabase insert call
-    const { data, error } = await supabase
-      .from('FMS')
-      .insert([insertData])
-      .select();
-
-    if (error) {
-      throw error;
-    }
-
-    // Show success message with location status
-    const successMessage = locationData 
-      ? `✅ ${entityType} registered successfully with location!` 
-      : `✅ ${entityType} registered successfully! (Location unavailable)`;
-    
-    showToast(successMessage);
-
-    // Reset form data after successful submission
-    setFormData({
-      stateName: "",
-      districtName: "",
-      areaName: "",
-      salesPersonName:
-        userRole === "User" && currentUser?.salesPersonName
-          ? currentUser.salesPersonName
-          : "",
-      dealerName: "",
-      aboutDealer: "",
-      address: "",
-      dealerSize: "",
-      avgQty: "",
-      contactNumber: "",
-      emailAddress: "",
-      dob: "",
-      anniversary: "",
-      siteNature: "",
-      photo: null,
-    });
-    
-    // Reset photo data and clear file input
-    resetPhotoData();
-    setErrors({});
-    
-  } catch (error) {
-    console.error("Submission error:", error);
-    showToast(`❌ Error submitting form: ${error.message}`, "error");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   // Helper function to check if entity type is Site/Engineer
   const isSiteEngineer = entityType === "Site/Engineer";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 p-0 lg:p-8 font-inter">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 p-0 lg:p-8 font-inter">
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Main Form Card */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-8 py-6 flex justify-between">
+          <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 md:px-8 py-4 md:py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h3 className="text-2xl font-bold text-white mb-2 ">
+              <h3 className="text-xl md:text-2xl font-bold text-white mb-1 md:mb-2 ">
                 Dealer Information
               </h3>
-            <p className="text-purple-50 text-lg hidden md:block">
-  Fill in the details about the dealer and sales person
-</p>
+              <p className="text-red-50 text-sm md:text-lg hidden md:block">
+                Fill in the details about the dealer and sales person
+              </p>
             </div>
 
-            <div className="max-w-xs">
+            <div className="w-full md:w-auto md:max-w-xs">
               <select
                 value={entityType}
                 onChange={(e) => setEntityType(e.target.value)}
@@ -829,7 +829,7 @@ const handleSubmit = async (e) => {
               </select>
             </div>
           </div>
-          <div className="p-2 lg:p-8">
+          <div className="p-4 md:p-8">
             {entityType && (
               <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Location Information */}
@@ -845,7 +845,7 @@ const handleSubmit = async (e) => {
                         value={formData.stateName}
                         onChange={handleInputChange}
                         placeholder="Enter state name"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                       />
                       {errors.stateName && (
                         <p className="text-red-500 text-sm mt-2 font-medium">
@@ -864,7 +864,7 @@ const handleSubmit = async (e) => {
                         value={formData.districtName}
                         onChange={handleInputChange}
                         placeholder="Enter district name"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                       />
                       {errors.districtName && (
                         <p className="text-red-500 text-sm mt-2 font-medium">
@@ -883,7 +883,7 @@ const handleSubmit = async (e) => {
                         value={formData.areaName}
                         onChange={handleInputChange}
                         placeholder="Enter area name"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                       />
                       {errors.areaName && (
                         <p className="text-red-500 text-sm mt-2 font-medium">
@@ -910,18 +910,16 @@ const handleSubmit = async (e) => {
                                 !isSalesPersonDropdownOpen
                               )
                             }
-                            className={`w-full px-4 py-3 text-left bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium flex justify-between items-center ${
-                              isLoadingSalesPersons
-                                ? "opacity-70 cursor-not-allowed"
-                                : ""
-                            }`}
+                            className={`w-full px-4 py-3 text-left bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium flex justify-between items-center ${isLoadingSalesPersons
+                              ? "opacity-70 cursor-not-allowed"
+                              : ""
+                              }`}
                             disabled={isLoadingSalesPersons}
                           >
                             {formData.salesPersonName || "Select Sales Person"}
                             <svg
-                              className={`w-4 h-4 ml-2 transition-transform ${
-                                isSalesPersonDropdownOpen ? "rotate-180" : ""
-                              }`}
+                              className={`w-4 h-4 ml-2 transition-transform ${isSalesPersonDropdownOpen ? "rotate-180" : ""
+                                }`}
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -975,11 +973,10 @@ const handleSubmit = async (e) => {
                           onChange={handleInputChange}
                           placeholder="Enter sales person name"
                           readOnly={userRole === "User"}
-                          className={`w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium ${
-                            userRole === "User"
-                              ? "bg-gray-50 cursor-not-allowed"
-                              : ""
-                          }`}
+                          className={`w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium ${userRole === "User"
+                            ? "bg-gray-50 cursor-not-allowed"
+                            : ""
+                            }`}
                         />
                       )}
                       {errors.salesPersonName && (
@@ -999,7 +996,7 @@ const handleSubmit = async (e) => {
                         value={formData.dealerName}
                         onChange={handleInputChange}
                         placeholder="Enter dealer name"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                       />
                       {errors.dealerName && (
                         <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1017,7 +1014,7 @@ const handleSubmit = async (e) => {
                         value={formData.contactNumber}
                         onChange={handleInputChange}
                         placeholder="Enter contact number"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                       />
                       {errors.contactNumber && (
                         <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1037,7 +1034,7 @@ const handleSubmit = async (e) => {
                         value={formData.emailAddress}
                         onChange={handleInputChange}
                         placeholder="Enter Email Address"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                       />
                       {errors.emailAddress && (
                         <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1045,7 +1042,7 @@ const handleSubmit = async (e) => {
                         </p>
                       )}
                     </div>
-                    
+
                     {!isSiteEngineer && (
                       <>
                         <div className="space-y-2">
@@ -1058,7 +1055,7 @@ const handleSubmit = async (e) => {
                             value={formData.dob}
                             onChange={handleInputChange}
                             placeholder="Date Of Birth"
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                           />
                           {errors.dob && (
                             <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1076,7 +1073,7 @@ const handleSubmit = async (e) => {
                             value={formData.anniversary}
                             onChange={handleInputChange}
                             placeholder="Anniversary Date"
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                           />
                           {errors.anniversary && (
                             <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1086,7 +1083,7 @@ const handleSubmit = async (e) => {
                         </div>
                       </>
                     )}
-                    
+
                     {isSiteEngineer && (
                       <div className="space-y-2">
                         <label className="block text-sm font-semibold text-slate-700 mb-3">
@@ -1096,7 +1093,7 @@ const handleSubmit = async (e) => {
                           name="siteNature"
                           value={formData.siteNature}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                         >
                           <option value="">Select Site Nature</option>
                           {SITE_NATURE_OPTIONS.map((nature) => (
@@ -1128,7 +1125,7 @@ const handleSubmit = async (e) => {
                           value={formData.aboutDealer}
                           onChange={handleInputChange}
                           placeholder={`Enter information about the ${entityType.toLowerCase()}`}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium min-h-24 resize-none"
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium min-h-24 resize-none"
                         />
                         {errors.aboutDealer && (
                           <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1146,7 +1143,7 @@ const handleSubmit = async (e) => {
                           value={formData.address}
                           onChange={handleInputChange}
                           placeholder={`Enter ${entityType.toLowerCase()} address`}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium min-h-24 resize-none"
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium min-h-24 resize-none"
                         />
                         {errors.address && (
                           <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1166,7 +1163,7 @@ const handleSubmit = async (e) => {
                             name="dealerSize"
                             value={formData.dealerSize}
                             onChange={handleInputChange}
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                             disabled={isLoadingDealerSizes}
                           >
                             <option value="">
@@ -1199,15 +1196,15 @@ const handleSubmit = async (e) => {
                             <label className="block text-sm font-semibold text-slate-700 mb-3">
                               Upload Photo (with Location Capture)
                             </label>
-                            
+
                             {photoPreview && (
                               <div className="mb-4 p-4 bg-green-50 rounded-xl border border-green-200">
                                 <p className="text-green-700 font-medium mb-2">
                                   {photoLocation ? "✅ Photo with Location Watermark" : "📷 Photo Ready for Processing"}
                                 </p>
-                                <img 
-                                  src={photoPreview} 
-                                  alt="Preview" 
+                                <img
+                                  src={photoPreview}
+                                  alt="Preview"
                                   className="w-full h-48 object-contain rounded-lg bg-gray-100"
                                   onError={(e) => {
                                     console.error("Error loading image preview");
@@ -1232,15 +1229,15 @@ const handleSubmit = async (e) => {
                                   name="photo"
                                   onChange={handleInputChange}
                                   accept="image/*"
-                                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                                   disabled={isCapturingLocation}
                                 />
                               </div>
-                              
+
                               <button
                                 type="button"
                                 onClick={startCamera}
-                                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl shadow-sm transition-all duration-200 flex items-center justify-center gap-2"
+                                className="px-6 py-3 bg-[#800000] hover:bg-[#990000] text-white font-medium rounded-xl shadow-sm transition-all duration-200 flex items-center justify-center gap-2"
                                 disabled={isCapturingLocation || isCameraLoading}
                               >
                                 {isCameraLoading ? (
@@ -1261,7 +1258,7 @@ const handleSubmit = async (e) => {
                             </div>
 
                             {isCapturingLocation && (
-                              <p className="text-blue-600 text-sm mt-2">
+                              <p className="text-[#800000] text-sm mt-2">
                                 📍 Capturing location and processing image...
                               </p>
                             )}
@@ -1297,7 +1294,7 @@ const handleSubmit = async (e) => {
                               value={formData.avgQty}
                               onChange={handleInputChange}
                               placeholder="Enter average quantity"
-                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                             />
                             {errors.avgQty && (
                               <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1317,7 +1314,7 @@ const handleSubmit = async (e) => {
                             value={formData.avgQty}
                             onChange={handleInputChange}
                             placeholder="Enter average quantity"
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-700 font-medium"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-[#800000] focus:border-[#800000] transition-all duration-200 text-slate-700 font-medium"
                           />
                           {errors.avgQty && (
                             <p className="text-red-500 text-sm mt-2 font-medium">
@@ -1339,14 +1336,13 @@ const handleSubmit = async (e) => {
                       isLoadingDealerSizes ||
                       isCapturingLocation
                     }
-                    className={`w-full lg:w-auto bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 hover:from-purple-700 hover:via-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] ${
-                      isSubmitting ||
+                    className={`w-full lg:w-auto bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] hover:from-[#660000] hover:via-[#800000] hover:to-[#990000] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] ${isSubmitting ||
                       (userRole === "Admin" && isLoadingSalesPersons) ||
                       isLoadingDealerSizes ||
                       isCapturingLocation
-                        ? "opacity-50 cursor-not-allowed"
-                        : ""
-                    }`}
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                      }`}
                   >
                     {isSubmitting ? `Registering ${entityType}...` : `Register ${entityType}`}
                   </button>
@@ -1404,14 +1400,14 @@ const handleSubmit = async (e) => {
                     />
                     <canvas ref={canvasRef} className="hidden" />
                   </div>
-                  
+
                   <div className="flex justify-center gap-4">
                     <button
                       onClick={capturePhoto}
                       className="px-8 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 flex items-center gap-2"
                     >
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="10" fill="currentColor"/>
+                        <circle cx="12" cy="12" r="10" fill="currentColor" />
                       </svg>
                       Capture Photo
                     </button>
@@ -1475,9 +1471,8 @@ const handleSubmit = async (e) => {
               </div>
 
               <h2
-                className={`text-2xl font-bold mb-4 ${
-                  modalType === "success" ? "text-green-600" : "text-red-600"
-                }`}
+                className={`text-2xl font-bold mb-4 ${modalType === "success" ? "text-green-600" : "text-red-600"
+                  }`}
               >
                 {modalType === "success" ? "Success!" : "Error!"}
               </h2>
@@ -1488,11 +1483,10 @@ const handleSubmit = async (e) => {
 
               <button
                 onClick={closeModal}
-                className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${
-                  modalType === "success"
-                    ? "bg-green-500 hover:bg-green-600 focus:ring-green-300"
-                    : "bg-red-500 hover:bg-red-600 focus:ring-red-300"
-                }`}
+                className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${modalType === "success"
+                  ? "bg-green-500 hover:bg-green-600 focus:ring-green-300"
+                  : "bg-red-500 hover:bg-red-600 focus:ring-red-300"
+                  }`}
               >
                 Ok
               </button>

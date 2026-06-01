@@ -40,9 +40,9 @@ const AttendanceHistory = ({ attendanceData, isLoading, userRole }) => {
 
   return (
     <div className="mt-12 bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-6 py-6">
+      <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-6 py-6">
         <h3 className="text-2xl font-bold text-white mb-2">Attendance History</h3>
-        <p className="text-blue-50 text-lg">
+        <p className="text-red-50 text-lg">
           {userRole === "Admin" ? "All records" : "Your records"} are displayed below.
         </p>
       </div>
@@ -92,7 +92,7 @@ const AttendanceHistory = ({ attendanceData, isLoading, userRole }) => {
                         href={record.mapLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        className="text-[#800000] hover:text-[#660000] flex items-center gap-1"
                       >
                         <MapPin className="w-4 h-4" /> View Map
                       </a>
@@ -117,7 +117,7 @@ const AttendanceHistory = ({ attendanceData, isLoading, userRole }) => {
             {/* Header with Name and Status */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-[#800000] to-[#b30000] rounded-full flex items-center justify-center">
                   <User className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -146,7 +146,7 @@ const AttendanceHistory = ({ attendanceData, isLoading, userRole }) => {
                   href={record.mapLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 flex items-center gap-2 text-sm font-medium"
+                  className="text-[#800000] hover:text-[#660000] flex items-center gap-2 text-sm font-medium"
                 >
                   <Navigation className="w-4 h-4" />
                   View Location on Map

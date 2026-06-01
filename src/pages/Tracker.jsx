@@ -460,67 +460,65 @@ const Tracker = () => {
     <>
       <Toaster position="top-right" />
 
-      <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-3 lg:p-8 overflow-hidden">
-        <div className="max-w-7xl mx-auto h-full flex flex-col">
-          {/* Main Card - Takes full height */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col flex-1">
+      <div className="w-full bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 p-0 sm:p-3 lg:p-6 rounded-xl">
+        <div className="max-w-7xl mx-auto flex flex-col">
+          {/* Main Card */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl md:rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col">
             {/* Fixed Header Section */}
             <div className="flex-shrink-0">
-              <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-2 sm:px-8 py-2 sm:py-6">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  {/* Title Section - Centered on all screens */}
-                  <div className="text-center lg:text-left">
-                    <h3 className="lg:text-2xl font-bold text-white mb-2 text-xl">
+              <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 sm:px-8 py-3 sm:py-6">
+                <div className="flex flex-row items-center justify-between gap-2 lg:gap-4">
+                  {/* Title Section */}
+                  <div className="text-left">
+                    <h3 className="lg:text-2xl font-bold text-white mb-0 lg:mb-2 text-lg">
                       Dealer Tracking
                     </h3>
-                    <p className="text-green-50 text-lg hidden md:block">
+                    {/* <p className="text-green-50 text-lg hidden md:block">
                       Comprehensive view of all dealer interactions and follow-ups
-                    </p>
-                    <p className="text-green-100 text-sm mt-2 hidden md:block">
+                    </p> */}
+                    {/* <p className="text-green-100 text-sm mt-2 hidden md:block">
                       Current User:{" "}
                       <span className="font-semibold">
                         {currentUserSalesPersonName}
                       </span>{" "}
                       (Role: <span className="font-semibold">{userRole}</span>)
                       {isAdmin && " - Admin View"}
-                    </p>
+                    </p> */}
                   </div>
 
-                  {/* Export Button - Right aligned */}
-                  <div className="flex justify-center lg:justify-end">
+                  {/* Export Button */}
+                  <div className="flex justify-end">
                     <button
                       onClick={exportData}
-                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2"
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 lg:py-2 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-1 lg:gap-2 text-sm lg:text-base"
                     >
                       <DownloadIcon className="h-4 w-4" />
-                      Export
+                      <span className="hidden sm:inline">Export</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Search Bar - Fixed */}
-              <div className="p-4 sm:p-6 border-b border-slate-200 bg-white">
-                <div className="flex items-center">
-                  <div className="relative w-full max-w-md">
-                    <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-                    <input
-                      type="search"
-                      placeholder="Search dealers..."
-                      className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-slate-700 font-medium"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {/* Scrollable Content Section - Takes remaining space */}
-            <div className="flex-1 overflow-hidden">
+            {/* Content Section */}
+            <div className="w-full">
+              {/* Search Bar - Inside content area */}
+              <div className="p-4 sm:px-6 sm:py-4 bg-slate-50/50">
+                <div className="relative w-full md:max-w-md">
+                  <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <input
+                    type="search"
+                    placeholder="Search dealers..."
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-slate-700 font-medium"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
               {/* Desktop Table View (hidden on mobile) */}
-              <div className="hidden lg:block h-full">
-                <div className="h-full flex flex-col">
+              <div className="hidden lg:block">
+                <div className="h-[calc(100vh-300px)] flex flex-col">
                   {/* Scrollable Table Container */}
                   <div className="flex-1 overflow-auto">
                     <table className="w-full">
@@ -564,8 +562,8 @@ const Tracker = () => {
                                     <button
                                       onClick={() => openInGoogleMaps(item)}
                                       className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${item.latitude && item.longitude
-                                          ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 hover:shadow-sm"
-                                          : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                                        ? "bg-[#ffcccc] text-[#800000] hover:bg-[#ffb3b3] border border-[#ffb3b3] hover:shadow-sm"
+                                        : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                                         }`}
                                       disabled={!item.latitude || !item.longitude}
                                       title={item.latitude && item.longitude ? "Open in Google Maps" : "Location not available"}
@@ -590,7 +588,7 @@ const Tracker = () => {
               </div>
 
               {/* Mobile Card View (hidden on desktop) */}
-              <div className="lg:hidden h-full overflow-auto">
+              <div className="lg:hidden w-full overflow-visible">
                 {filteredIndents.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-slate-500 font-medium">No results found.</div>
@@ -614,7 +612,7 @@ const Tracker = () => {
                                 <h3 className="font-bold text-slate-900 text-lg mb-2">
                                   {item.col5 || "Unnamed Dealer"}
                                 </h3>
-                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                                   {primaryFields.map((header) => (
                                     <div key={header.id}>
                                       <span className="text-slate-500 font-medium">{header.label}:</span>
@@ -647,8 +645,8 @@ const Tracker = () => {
                                         <button
                                           onClick={() => openInGoogleMaps(item)}
                                           className={`p-2 rounded-lg transition-all duration-200 flex items-center gap-1 ${item.latitude && item.longitude
-                                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200"
-                                              : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                                            ? "bg-[#ffcccc] text-[#800000] hover:bg-[#ffb3b3] border border-[#ffb3b3]"
+                                            : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
                                             }`}
                                           disabled={!item.latitude || !item.longitude}
                                         >

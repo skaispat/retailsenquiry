@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
-import { Users, Store, ShoppingBag, AlertCircle, X } from "lucide-react";
+import { Users, Store, ShoppingBag, AlertCircle, X, Target } from "lucide-react";
 import MonthlySales from "../components/dashboard/MonthlySales";
-import OrderStatus from "../components/dashboard/OrderStatus";
+import TargetVsAchieved from "../components/dashboard/TargetVsAchieved";
 import { AuthContext } from "../App";
 import supabase from "../SupaabseClient";
 
@@ -27,6 +27,7 @@ function Dashboard() {
   const [endDate, setEndDate] = useState("");
   const [selectedSalesperson, setSelectedSalesperson] = useState("");
   const [uniqueSalespersons, setUniqueSalespersons] = useState([]);
+  const [selectedMonthDate, setSelectedMonthDate] = useState(new Date());
 
   const isAdmin = userRole.toLowerCase() === "admin";
 
@@ -34,6 +35,79 @@ function Dashboard() {
   const [dialogTitle, setDialogTitle] = useState("");
   const [dialogData, setDialogData] = useState([]);
   const [dialogHeaders, setDialogHeaders] = useState([]);
+
+  // Set Target state
+  const [isSetTargetDialogOpen, setIsSetTargetDialogOpen] = useState(false);
+  const [activeSalespersons, setActiveSalespersons] = useState([]);
+  const [targets, setTargets] = useState({});
+  const [targetIds, setTargetIds] = useState({});
+  const [prevTargets, setPrevTargets] = useState({});
+  const [isSubmittingTarget, setIsSubmittingTarget] = useState(false);
+
+  const [currentUserTarget, setCurrentUserTarget] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUserTarget = async () => {
+      if (!isAuthenticated || !currentUser) return;
+
+      try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+        const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+
+        const startDate = `${year}-${monthStr}-01`;
+        const endDate = `${year}-${monthStr}-${lastDay}`;
+
+        if (isAdmin) {
+          const { data, error } = await supabase
+            .from("monthly_target")
+            .select("target")
+            .gte("month", startDate)
+            .lte("month", endDate);
+
+          if (error) {
+            console.error("Error fetching admin target sum:", error);
+            return;
+          }
+
+          if (isMounted && data) {
+            const sum = data.reduce((acc, curr) => acc + (curr.target || 0), 0);
+            setCurrentUserTarget(sum > 0 ? sum : "Not Set");
+          }
+        } else {
+          const { data, error } = await supabase
+            .from("monthly_target")
+            .select("target")
+            .eq("sales_person_name", currentUserSalesPersonName)
+            .gte("month", startDate)
+            .lte("month", endDate)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (error) {
+            console.error("Error fetching user target:", error);
+            return;
+          }
+
+          if (isMounted && data && data.length > 0) {
+            setCurrentUserTarget(data[0].target);
+          } else if (isMounted) {
+            setCurrentUserTarget("Not Set");
+          }
+        }
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    };
+
+    fetchUserTarget();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, currentUser, isAdmin, currentUserSalesPersonName]);
 
   // Helper function to normalize names (remove spaces and make lowercase)
   const normalizeName = (name) => {
@@ -128,15 +202,15 @@ function Dashboard() {
   };
 
   const FMS_DISPLAY_COLUMNS_FOR_DIALOG = [
+    "dealer_name",
+    "last_called_on",
+    "customer_feedback",
     "sales_person_name",
     "dealer_code",
-    "dealer_name",
     "contact_no",
     "next_follow_up",
     "dealer_region",
-    "last_called_on",
     "order_status",
-    "customer_feedback",
     "next_action",
     "dealer_size",
     "order_quantity",
@@ -266,28 +340,52 @@ function Dashboard() {
 
   // Fetch data from Supabase
   useEffect(() => {
+    let isMounted = true;
+
     const fetchData = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
       setError(null);
 
       if (!isAuthenticated || !currentUser) {
-        // console.log("DEBUG: Not authenticated or currentUser missing.");
-        setIsLoading(false);
-        setError("Please log in to view the dashboard.");
+        if (isMounted) {
+          setIsLoading(false);
+          setError("Please log in to view the dashboard.");
+        }
         return;
       }
 
       try {
-        let query = supabase
-          .from("FMS")
-          .select("*")
-          .order("timestamp", { ascending: false });
+        let allFetchedData = [];
+        let from = 0;
+        const step = 1000;
+        let hasMore = true;
+        const MAX_RECORDS = 50000; // Production safety limit to prevent memory crashes
 
-        const { data, error } = await query;
+        while (hasMore && isMounted && allFetchedData.length < MAX_RECORDS) {
+          const { data, error } = await supabase
+            .from("FMS")
+            .select("*")
+            .order("timestamp", { ascending: false })
+            .range(from, from + step - 1);
 
-        if (error) {
-          throw new Error(`Supabase error: ${error.message}`);
+          if (error) {
+            throw new Error(`Supabase error: ${error.message}`);
+          }
+
+          if (data && data.length > 0) {
+            allFetchedData = [...allFetchedData, ...data];
+            from += step;
+            if (data.length < step) {
+              hasMore = false;
+            }
+          } else {
+            hasMore = false;
+          }
         }
+
+        if (!isMounted) return;
+        const data = allFetchedData;
 
         if (data && data.length > 0) {
           const currentUserNormalizedName = normalizeName(
@@ -357,7 +455,9 @@ function Dashboard() {
             );
           }
 
-          setAllFMSData(filteredRows);
+          if (isMounted) {
+            setAllFMSData(filteredRows);
+          }
 
           // Extract unique salespersons
           const salespersons = new Set();
@@ -371,21 +471,30 @@ function Dashboard() {
               salespersons.add(salespersonName.trim());
             }
           });
-          setUniqueSalespersons([...Array.from(salespersons).sort()]);
+
+          if (isMounted) {
+            setUniqueSalespersons([...Array.from(salespersons).sort()]);
+          }
         } else {
-          setAllFMSData([]);
-          setUniqueSalespersons([]);
-          setError("No data found in the FMS table.");
+          if (isMounted) {
+            setAllFMSData([]);
+            setUniqueSalespersons([]);
+            setError("No data found in the FMS table.");
+          }
         }
       } catch (error) {
         console.error("Error fetching data:", error);
-        setError(`Failed to load data: ${error.message}`);
+        if (isMounted) setError(`Failed to load data: ${error.message}`);
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
 
     fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [
     isAuthenticated,
     currentUser,
@@ -641,11 +750,174 @@ function Dashboard() {
     // );
   }, [allFMSData, startDate, endDate, isAdmin, selectedSalesperson]);
 
+  const handleSetTargetClick = async () => {
+    setIsSetTargetDialogOpen(true);
+    try {
+      const { data: usersData, error: usersError } = await supabase
+        .from("master")
+        .select("sales_person_name")
+        .eq("status", "TRUE")
+        .eq("role", "User");
+
+      if (usersError) throw usersError;
+
+      let uniqueNames = [];
+      if (usersData) {
+        uniqueNames = [
+          ...new Set(usersData.map((d) => d.sales_person_name).filter(Boolean)),
+        ].sort();
+        setActiveSalespersons(uniqueNames);
+      }
+
+      // Fetch existing targets for the current and previous month
+      const now = new Date();
+      const year = now.getFullYear();
+      const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+
+      const startDate = `${year}-${monthStr}-01`;
+      const endDate = `${year}-${monthStr}-${lastDay}`;
+
+      // Previous month
+      let prevYear = year;
+      let prevMonthNum = now.getMonth(); // 0 to 11
+      if (prevMonthNum === 0) {
+        prevMonthNum = 12;
+        prevYear -= 1;
+      }
+      const prevMonthStr = String(prevMonthNum).padStart(2, '0');
+      const prevLastDay = new Date(prevYear, prevMonthNum, 0).getDate();
+      const prevStartDate = `${prevYear}-${prevMonthStr}-01`;
+      const prevEndDate = `${prevYear}-${prevMonthStr}-${prevLastDay}`;
+
+      const { data: targetsData, error: targetsError } = await supabase
+        .from("monthly_target")
+        .select("*")
+        .gte("month", prevStartDate)
+        .lte("month", endDate);
+
+      if (targetsError && targetsError.code !== 'PGRST116') {
+        console.error("Error fetching existing targets:", targetsError);
+      }
+
+      const initialTargets = {};
+      const initialTargetIds = {};
+      const initialPrevTargets = {};
+
+      uniqueNames.forEach(name => {
+        initialTargets[name] = "";
+        initialPrevTargets[name] = "—";
+      });
+
+      if (targetsData) {
+        // Find targets that fall within the current month or previous month
+        targetsData.forEach(t => {
+          if (!uniqueNames.includes(t.sales_person_name)) return;
+
+          if (t.month >= startDate && t.month <= endDate) {
+            initialTargets[t.sales_person_name] = t.target;
+            initialTargetIds[t.sales_person_name] = t.id;
+          } else if (t.month >= prevStartDate && t.month <= prevEndDate) {
+            initialPrevTargets[t.sales_person_name] = t.target;
+          }
+        });
+      }
+
+      setTargets(initialTargets);
+      setTargetIds(initialTargetIds);
+      setPrevTargets(initialPrevTargets);
+    } catch (err) {
+      console.error("Error fetching active sales persons or targets:", err);
+    }
+  };
+
+  const handleTargetChange = (name, value) => {
+    setTargets(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleTargetSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmittingTarget(true);
+    try {
+      // Calculate precise IST time to avoid UTC day rollover issues
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+      const istDate = new Date(now.getTime() + istOffset);
+
+      const currentMonthDate = istDate.toISOString().split("T")[0]; // YYYY-MM-DD strictly in IST
+      const currentTimestamp = istDate.toISOString().replace("Z", "+05:30"); // ISO8601 with +05:30 offset
+
+      const inserts = [];
+      const updates = [];
+
+      activeSalespersons.forEach((name) => {
+        if (targets[name] !== undefined && targets[name].toString().trim() !== "") {
+          const record = {
+            sales_person_name: name,
+            target: parseFloat(targets[name]),
+          };
+
+          if (targetIds[name]) {
+            // Update existing
+            record.id = targetIds[name];
+            updates.push(record);
+          } else {
+            // Insert new
+            record.month = currentMonthDate;
+            record.created_at = currentTimestamp;
+            inserts.push(record);
+          }
+        }
+      });
+
+      if (inserts.length === 0 && updates.length === 0) {
+        alert("Please enter at least one target value.");
+        setIsSubmittingTarget(false);
+        return;
+      }
+
+      // Execute inserts
+      if (inserts.length > 0) {
+        const { error: insertError } = await supabase
+          .from("monthly_target")
+          .insert(inserts);
+        if (insertError) throw insertError;
+      }
+
+      // Execute updates
+      if (updates.length > 0) {
+        await Promise.all(
+          updates.map(async (record) => {
+            const { error: updateError } = await supabase
+              .from("monthly_target")
+              .update({ target: record.target })
+              .eq("id", record.id);
+            if (updateError) throw updateError;
+          })
+        );
+      }
+
+      // console.log("Submit Targets success");
+
+      setIsSetTargetDialogOpen(false);
+      setTargets({});
+      setTargetIds({});
+    } catch (error) {
+      console.error("Error saving targets:", error);
+      alert("Failed to save targets: " + error.message);
+    } finally {
+      setIsSubmittingTarget(false);
+    }
+  };
+
   const handleCardClick = (kpiType) => {
     let dataForDialog = [];
     let title = "";
 
-    const headers = FMS_DISPLAY_COLUMNS_FOR_DIALOG.map(
+    let headers = FMS_DISPLAY_COLUMNS_FOR_DIALOG.map(
       (columnKey) => FMS_COLUMNS_INFO[columnKey],
     ).filter(Boolean);
 
@@ -665,6 +937,7 @@ function Dashboard() {
 
     if (kpiType === "totalRecords") {
       title = "All Records";
+      headers = headers.slice(0, 4);
       if (startDate && endDate) {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
@@ -696,6 +969,16 @@ function Dashboard() {
       }
     } else if (kpiType === "activeDealers") {
       title = "Active Dealers";
+
+      const activeDealersColumnsOrder = [
+        "dealer_name",
+        "dealer_region",
+        "sales_person_name",
+      ];
+      headers = activeDealersColumnsOrder
+        .map((columnKey) => FMS_COLUMNS_INFO[columnKey])
+        .filter(Boolean);
+
       const uniqueDealerCodes = new Set();
 
       // Start with base data
@@ -754,6 +1037,16 @@ function Dashboard() {
       // console.log("📋 Active dealers dialog data count:", dataForDialog.length);
     } else if (kpiType === "totalOrders") {
       title = "Total Orders";
+      const totalOrdersColumnsOrder = [
+        "dealer_name",
+        "sales_person_name",
+        "order_quantity",
+        "last_order_before",
+      ];
+      headers = totalOrdersColumnsOrder
+        .map((columnKey) => FMS_COLUMNS_INFO[columnKey])
+        .filter(Boolean);
+
       let tempData = [...baseData];
       if (startDate && endDate) {
         const start = new Date(startDate);
@@ -853,15 +1146,15 @@ function Dashboard() {
 
   if (error && allFMSData.length === 0) {
     return (
-      <div className="min-h-screen p-3 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 sm:p-6">
+      <div className="min-h-screen p-3 bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 sm:p-6">
         <div className="mx-auto space-y-4 max-w-7xl sm:space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 sm:space-y-2">
-              <h1 className="text-2xl font-bold text-transparent sm:text-3xl md:text-4xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text">
+              <h1 className="text-2xl font-bold text-transparent sm:text-3xl md:text-4xl bg-gradient-to-r from-[#800000] via-[#a30000] to-[#cc0000] bg-clip-text">
                 Dashboard
               </h1>
               <p className="text-sm font-medium sm:text-base md:text-lg text-slate-600">
-                {getGreeting()}, {isAdmin ? "Abhishek Agrawal (MD)" : currentUserSalesPersonName}!
+                {getGreeting()}, {currentUserSalesPersonName}!
               </p>
             </div>
           </div>
@@ -875,91 +1168,113 @@ function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen p-3 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 sm:p-6">
+    <div className="min-h-screen p-3 bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 sm:p-6">
       <div className="mx-auto space-y-4 max-w-7xl sm:space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1 sm:space-y-2">
-            <h1 className="text-2xl font-bold text-transparent sm:text-3xl md:text-4xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text">
-              Dashboard
-            </h1>
-            <p className="text-sm font-medium sm:text-base md:text-lg text-slate-600">
-              {getGreeting()}, {isAdmin ? "Abhishek Agrawal (MD)" : currentUserSalesPersonName}
-            </p>
-          </div>
-          <div className="flex flex-col w-full gap-2 px-3 py-2 border rounded-lg shadow-md sm:flex-row bg-white/80 backdrop-blur-sm sm:rounded-xl sm:px-4 sm:py-3 sm:shadow-lg border-white/20 sm:w-auto">
-            <div className="flex items-center justify-center gap-2 sm:justify-start text-slate-700">
-              <span className="text-xs font-semibold text-blue-600 sm:text-sm md:text-base">
-                Today:
-              </span>
-              <span className="text-xs font-medium sm:text-sm md:text-base">
-                {new Date().toLocaleDateString("en-GB")}
-              </span>
+          <div className="flex items-start justify-between sm:block w-full sm:w-auto">
+            <div className="space-y-1 sm:space-y-2">
+              <h1 className="text-2xl font-bold text-transparent sm:text-3xl md:text-4xl bg-gradient-to-r from-[#800000] via-[#a30000] to-[#cc0000] bg-clip-text">
+                Dashboard
+              </h1>
             </div>
-            <div className="flex items-center justify-center gap-2 sm:justify-start text-slate-700">
-              <label
-                htmlFor="startDate"
-                className="text-xs font-semibold text-blue-600 sm:text-sm md:text-base"
-              >
-                From:
-              </label>
-              <input
-                type="date"
-                id="startDate"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="p-1 text-xs border border-gray-300 rounded-md sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="flex items-center justify-center gap-2 sm:justify-start text-slate-700">
-              <label
-                htmlFor="endDate"
-                className="text-xs font-semibold text-blue-600 sm:text-sm md:text-base"
-              >
-                To:
-              </label>
-              <input
-                type="date"
-                id="endDate"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="p-1 text-xs border border-gray-300 rounded-md sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            {isAdmin && (
-              <div className="flex items-center justify-center gap-2 sm:justify-start text-slate-700">
-                <label
-                  htmlFor="salespersonFilter"
-                  className="text-xs font-semibold text-blue-600 sm:text-sm md:text-base"
-                >
-                  Salesperson:
-                </label>
-                <select
-                  id="salespersonFilter"
-                  value={selectedSalesperson}
-                  onChange={(e) => setSelectedSalesperson(e.target.value)}
-                  className="p-1 text-xs border border-gray-300 rounded-md sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Salespersons</option>
-                  {uniqueSalespersons.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+
+            {/* Mobile Target Box */}
+            {currentUserTarget !== null && (
+              <div className="sm:hidden px-4 py-1.5 rounded-lg shadow-md bg-gradient-to-br from-[#990000] via-[#800000] to-[#660000] flex items-center justify-center min-w-[110px] border border-white/20 mt-1">
+                <span className="text-xs font-bold text-white tracking-wide">Target : {currentUserTarget} Tons</span>
               </div>
             )}
           </div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center w-full lg:w-auto mt-2 sm:mt-0">
+            {/* Desktop Target Box */}
+            {currentUserTarget !== null && (
+              <div className="hidden sm:flex px-5 py-2 sm:py-2.5 rounded-lg shadow-md sm:rounded-xl sm:shadow-lg bg-gradient-to-br from-[#990000] via-[#800000] to-[#660000] items-center justify-center min-w-[140px] border border-white/20">
+                <span className="text-sm sm:text-base font-bold text-white tracking-wide">Target : {currentUserTarget} Tons</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-3 px-4 py-3 border rounded-lg shadow-md bg-white/80 backdrop-blur-sm sm:rounded-xl sm:shadow-lg border-white/20 w-full lg:w-auto">
+              {/* From */}
+              <div className="flex items-center gap-2 text-slate-700">
+                <label
+                  htmlFor="startDate"
+                  className="text-xs font-semibold text-[#800000] sm:text-sm md:text-base whitespace-nowrap"
+                >
+                  From:
+                </label>
+                <input
+                  type="date"
+                  id="startDate"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="p-1 text-xs border border-gray-300 rounded-md sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
+                />
+              </div>
+
+              {/* To */}
+              <div className="flex items-center gap-2 text-slate-700">
+                <label
+                  htmlFor="endDate"
+                  className="text-xs font-semibold text-[#800000] sm:text-sm md:text-base whitespace-nowrap"
+                >
+                  To:
+                </label>
+                <input
+                  type="date"
+                  id="endDate"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="p-1 text-xs border border-gray-300 rounded-md sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
+                />
+              </div>
+
+              {isAdmin && (
+                <div className="flex items-center gap-2 text-slate-700">
+                  {/* <label
+                  htmlFor="salespersonFilter"
+                  className="text-xs font-semibold text-[#800000] sm:text-sm md:text-base whitespace-nowrap"
+                >
+                  Salesperson:
+                </label> */}
+                  <select
+                    id="salespersonFilter"
+                    value={selectedSalesperson}
+                    onChange={(e) => setSelectedSalesperson(e.target.value)}
+                    className="p-1 text-xs border border-gray-300 rounded-md sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white min-w-[140px] max-w-[180px]"
+                  >
+                    <option value="">Area Sales Managers</option>
+                    {uniqueSalespersons.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {isAdmin && (
+                <div className="flex items-center gap-2 text-slate-700">
+                  <span><pre>  </pre></span>
+                  <button
+                    onClick={handleSetTargetClick}
+                    className="flex items-center justify-center gap-1.5 p-1.5 px-3 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-[#800000] to-[#b30000] rounded-md focus:outline-none focus:ring-2 focus:ring-[#800000] focus:ring-offset-1 min-w-[140px] max-w-[180px] shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
+                  >
+                    <Target className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    Set Target
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* Total Records Card */}
           <div
             className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden group active:scale-[0.99] sm:hover:scale-[1.02] transition-all duration-300 cursor-pointer"
             onClick={() => handleCardClick("totalRecords")}
           >
-            <div className="h-full p-3 bg-gradient-to-br from-blue-400 via-blue-500 to-indigo-500 sm:p-4 md:p-6">
+            <div className="h-full p-3 bg-gradient-to-br from-[#990000] via-[#800000] to-[#660000] sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-blue-100 uppercase tracking-wider mb-1">
+                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-red-100 uppercase tracking-wider mb-1">
                     Total Records
                   </h3>
                   <div className="mb-1 text-xl font-bold text-white sm:text-2xl md:text-3xl">
@@ -977,10 +1292,10 @@ function Dashboard() {
             className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden group active:scale-[0.99] sm:hover:scale-[1.02] transition-all duration-300 cursor-pointer"
             onClick={() => handleCardClick("activeDealers")}
           >
-            <div className="h-full p-3 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 sm:p-4 md:p-6">
+            <div className="h-full p-3 bg-gradient-to-br from-[#8A0000] via-[#730000] to-[#590000] sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-purple-100 uppercase tracking-wider mb-1">
+                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-red-100 uppercase tracking-wider mb-1">
                     Active Dealers
                   </h3>
                   <div className="mb-1 text-xl font-bold text-white sm:text-2xl md:text-3xl">
@@ -998,10 +1313,10 @@ function Dashboard() {
             className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden group active:scale-[0.99] sm:hover:scale-[1.02] transition-all duration-300 cursor-pointer"
             onClick={() => handleCardClick("totalOrders")}
           >
-            <div className="h-full p-3 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 sm:p-4 md:p-6">
+            <div className="h-full p-3 bg-gradient-to-br from-[#b30000] via-[#990000] to-[#800000] sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-pink-100 uppercase tracking-wider mb-1">
+                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-red-100 uppercase tracking-wider mb-1">
                     Total Orders
                   </h3>
                   <div className="mb-1 text-xl font-bold text-white sm:text-2xl md:text-3xl">
@@ -1019,10 +1334,10 @@ function Dashboard() {
             className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-md sm:shadow-lg border border-white/20 overflow-hidden group active:scale-[0.99] sm:hover:scale-[1.02] transition-all duration-300 cursor-pointer"
             onClick={() => handleCardClick("pendingEnquiries")}
           >
-            <div className="p-3 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 sm:p-4 md:p-6">
+            <div className="p-3 bg-gradient-to-br from-[#800000] via-[#660000] to-[#4D0000] sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-amber-100 uppercase tracking-wider mb-1">
+                  <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-red-100 uppercase tracking-wider mb-1">
                     Pending Enquiries
                   </h3>
                   <div className="mb-1 text-xl font-bold text-white sm:text-2xl md:text-3xl">
@@ -1039,12 +1354,17 @@ function Dashboard() {
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {/* Pass filteredData and FMS_COLUMNS_INFO to chart components */}
           <MonthlySales
-            filteredData={currentFilteredData}
-            FMS_COLUMNS_INFO={FMS_COLUMNS_INFO}
+            isAdmin={isAdmin}
+            currentUserSalesPersonName={currentUserSalesPersonName}
+            selectedSalesperson={selectedSalesperson}
+            currentDate={selectedMonthDate}
+            setCurrentDate={setSelectedMonthDate}
           />
-          <OrderStatus
-            filteredData={currentFilteredData}
-            FMS_COLUMNS_INFO={FMS_COLUMNS_INFO}
+          <TargetVsAchieved
+            isAdmin={isAdmin}
+            currentUserSalesPersonName={currentUserSalesPersonName}
+            selectedSalesperson={selectedSalesperson}
+            currentDate={selectedMonthDate}
           />
         </div>
       </div>
@@ -1053,7 +1373,7 @@ function Dashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in-0">
           <div className="relative w-full max-w-4xl h-[50vh] rounded-lg sm:rounded-xl bg-white/90 backdrop-blur-sm p-6 shadow-2xl animate-in zoom-in-95 max-h-[70vh] overflow-hidden transform scale-100 opacity-100 border border-white/30">
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text">
+              <h2 className="text-2xl font-bold text-transparent bg-gradient-to-r from-[#800000] via-[#a30000] to-[#cc0000] bg-clip-text">
                 {dialogTitle}
                 {selectedSalesperson &&
                   selectedSalesperson !== "All Salespersons" &&
@@ -1107,7 +1427,10 @@ function Dashboard() {
                           {dialogHeaders.map((header) => (
                             <td
                               key={`${row.id}-${header.property}`}
-                              className="px-6 py-4 text-sm text-gray-800 whitespace-nowrap"
+                              className={`px-6 py-4 text-sm text-gray-800 ${header.property === "dealer_name"
+                                ? "whitespace-normal break-words min-w-[200px] max-w-[300px]"
+                                : "whitespace-nowrap"
+                                }`}
                             >
                               {row[header.property] || "—"}
                             </td>
@@ -1118,6 +1441,93 @@ function Dashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Set Target Modal */}
+      {isSetTargetDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in-0">
+          <div className="relative w-full max-w-2xl max-h-[90vh] rounded-lg sm:rounded-xl bg-white/90 backdrop-blur-sm shadow-2xl animate-in zoom-in-95 border border-white/30 flex flex-col">
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-[#800000]">Set Target</h2>
+              <button
+                onClick={() => setIsSetTargetDialogOpen(false)}
+                className="p-2 text-gray-500 transition-colors rounded-full hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6">
+              <form id="targetForm" onSubmit={handleTargetSubmit} className="space-y-4">
+                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Sales Person
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Prev Month Target
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Target Value
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {activeSalespersons.length === 0 ? (
+                        <tr>
+                          <td colSpan="3" className="px-6 py-4 text-center text-sm text-gray-500">
+                            No active sales persons found.
+                          </td>
+                        </tr>
+                      ) : (
+                        activeSalespersons.map((name, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600 bg-gray-50 border-r border-gray-100">
+                              {prevTargets[name]}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <input
+                                type="number"
+                                value={targets[name] || ""}
+                                onChange={(e) => handleTargetChange(name, e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#800000] focus:border-[#800000]"
+                                placeholder="Enter target amount"
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </form>
+            </div>
+
+            <div className="p-6 pt-4 border-t border-gray-200 bg-gray-50 rounded-b-lg sm:rounded-b-xl flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSetTargetDialogOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 transition-colors border border-gray-300 rounded-lg hover:bg-gray-100 bg-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="targetForm"
+                disabled={isSubmittingTarget || activeSalespersons.length === 0}
+                className="px-4 py-2 text-sm font-medium text-white transition-colors bg-[#800000] rounded-lg hover:bg-[#990000] disabled:opacity-50"
+              >
+                {isSubmittingTarget ? "Saving..." : "Save Targets"}
+              </button>
             </div>
           </div>
         </div>

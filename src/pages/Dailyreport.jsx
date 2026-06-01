@@ -119,12 +119,12 @@ const MOBILE_HEADERS = [
       setError(null);
 
       if (!isAuthenticated) {
-        console.log("Not authenticated. Skipping data fetch for Daily Report.");
+        // console.log("Not authenticated. Skipping data fetch for Daily Report.");
         setIsLoading(false);
         return;
       }
 
-      console.log("🔄 Fetching data from Supabase tracking_history table...");
+      // console.log("🔄 Fetching data from Supabase tracking_history table...");
 
       // Build query based on user role - select all available columns
       let query = supabase
@@ -151,7 +151,7 @@ const MOBILE_HEADERS = [
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      console.log("✅ Tracking data loaded successfully from Supabase:", data);
+      // console.log("✅ Tracking data loaded successfully from Supabase:", data);
 
       // Format the data for display
       const formattedData = data.map((item, index) => {
@@ -171,8 +171,8 @@ const MOBILE_HEADERS = [
         return formattedItem;
       });
 
-      console.log('Formatted data:', formattedData.length, 'records');
-      console.log('Sample record:', formattedData[0]);
+      // console.log('Formatted data:', formattedData.length, 'records');
+      // console.log('Sample record:', formattedData[0]);
       setTrackingData(formattedData);
       
     } catch (err) {
@@ -439,7 +439,7 @@ const MOBILE_HEADERS = [
                     );
                   })}
                   <div className="pt-2 border-t border-gray-100">
-                    <span className="text-xs text-blue-600 font-medium">Tap to view details →</span>
+                    <span className="text-xs text-[#800000] font-medium">Tap to view details →</span>
                   </div>
                 </div>
               ))
@@ -529,7 +529,7 @@ const MOBILE_HEADERS = [
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
           <p className="text-slate-600 font-medium">Loading tracking data...</p>
@@ -540,7 +540,7 @@ const MOBILE_HEADERS = [
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
           <div className="text-red-500 mb-4">
             <svg
@@ -575,44 +575,36 @@ const MOBILE_HEADERS = [
   return (
     <>
       <Toaster position="top-right" />
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-4 lg:p-8">
-        <div className="max-w-7xl mx-auto space-y-8">
+      <div className="w-full bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 p-0 sm:p-4 lg:p-8 rounded-xl">
+        <div className="max-w-7xl mx-auto flex flex-col gap-8">
           {/* Main Card */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl md:rounded-2xl shadow-xl border border-white/20 overflow-hidden flex flex-col">
             {/* Header Section */}
-            <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 px-4 py-6 lg:px-8">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="text-center lg:text-left">
-                  <h3 className="text-xl lg:text-2xl font-bold text-white mb-2">
+            <div className="bg-gradient-to-r from-[#800000] via-[#990000] to-[#b30000] px-4 py-6 lg:px-8">
+              <div className="flex flex-row items-center justify-between gap-2 lg:gap-4">
+                <div className="text-left">
+                  <h3 className="text-lg lg:text-2xl font-bold text-white mb-0">
                     {!isAdmin ? "Today's Report" : "Daily Report"}
                   </h3>
-                  <p className="text-orange-50 text-sm lg:text-lg hidden md:block">
-                    {!isAdmin ? `Today's tracking for ${currentUserSalesPersonName}` : "Tracking History & Dealer Interactions"}
-                  </p>
-                  <p className="text-orange-100 text-xs lg:text-sm mt-2 hidden md:block">
-                    Current User: <span className="font-semibold">{currentUserSalesPersonName}</span> (Role: <span className="font-semibold">{userRole}</span>)
-                  </p>
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="flex flex-row items-center justify-end gap-2 lg:gap-3">
                   {/* Mobile Filter Toggle */}
                   {isMobile && isAdmin && (
-                    <div className="relative">
-                      <button
-                        onClick={() => setIsFilterOpen(!isFilterOpen)}
-                        className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 flex items-center gap-2"
-                      >
-                        <Filter className="h-4 w-4" />
-                        Filters
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setIsFilterOpen(!isFilterOpen)}
+                      className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 lg:py-2 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-1 lg:gap-2 text-sm lg:text-base"
+                    >
+                      <Filter className="h-4 w-4" />
+                      <span className="hidden sm:inline">Filters</span>
+                    </button>
                   )}
                   <button
-                    onClick={downloadPDF}
+                     onClick={downloadPDF}
                     disabled={filteredData.length === 0}
-                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-3 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
+                    className="bg-white/20 hover:bg-white/30 text-white font-medium py-1.5 px-3 lg:py-2 lg:px-4 rounded-lg transition-all duration-200 flex items-center gap-1 lg:gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
                   >
                     <Download className="h-4 w-4" />
-                    <span className="hidden sm:inline">Export PDF</span>
+                    <span className="hidden sm:inline">Export</span>
                   </button>
                 </div>
               </div>
@@ -628,7 +620,7 @@ const MOBILE_HEADERS = [
                     <input
                       type="search"
                       placeholder="Search records..."
-                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -643,7 +635,7 @@ const MOBILE_HEADERS = [
                       type="date"
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                     />
                   </div>
 
@@ -655,7 +647,7 @@ const MOBILE_HEADERS = [
                     <select
                       value={dealerFilter}
                       onChange={(e) => setDealerFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Dealers</option>
                       {uniqueDealers.map(dealer => (
@@ -672,7 +664,7 @@ const MOBILE_HEADERS = [
                     <select
                       value={salesPersonFilter}
                       onChange={(e) => setSalesPersonFilter(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Sales Persons</option>
                       {uniqueSalesPersons.map(person => (
@@ -691,7 +683,7 @@ const MOBILE_HEADERS = [
                     <input
                       type="search"
                       placeholder="Search records..."
-                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-10 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -702,7 +694,7 @@ const MOBILE_HEADERS = [
                       type="date"
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000]"
                     />
                   </div>
 
@@ -710,7 +702,7 @@ const MOBILE_HEADERS = [
                     <select
                       value={dealerFilter}
                       onChange={(e) => setDealerFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Dealers</option>
                       {uniqueDealers.map(dealer => (
@@ -723,7 +715,7 @@ const MOBILE_HEADERS = [
                     <select
                       value={salesPersonFilter}
                       onChange={(e) => setSalesPersonFilter(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#800000] bg-white"
                     >
                       <option value="">All Sales Persons</option>
                       {uniqueSalesPersons.map(person => (
@@ -741,7 +733,7 @@ const MOBILE_HEADERS = [
                   <input
                     type="search"
                     placeholder={!isAdmin ? "Search today's records..." : "Search records..."}
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#800000]"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
