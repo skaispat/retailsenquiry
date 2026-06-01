@@ -27,7 +27,7 @@ const Reports = () => {
 
   const COLUMN_MAPPING = {
     'sales_person_name': 'col4',
-    'dealer_name': 'col5', 
+    'dealer_name': 'col5',
     'dealer_size': 'col8',
     'last_date_of_call': 'col21',
     'last_order_before': 'col26',
@@ -47,7 +47,7 @@ const Reports = () => {
 
     checkScreenSize();
     window.addEventListener('resize', checkScreenSize);
-    
+
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
@@ -197,7 +197,7 @@ const Reports = () => {
         fmsHeaders.forEach(header => {
           const rawValue = item[header.id];
           const colKey = COLUMN_MAPPING[header.id];
-          
+
           if (colKey) {
             itemObj[colKey] = rawValue;
             itemObj[`${colKey}_formatted`] = formatCellValue(rawValue, header.label);
@@ -255,7 +255,7 @@ const Reports = () => {
     const matchesSalesPersonFilter = salesPersonFilter
       ? salesPersonVal.includes(salesPersonFilter.toLowerCase())
       : true;
-    
+
     const matchesDealerNameFilter = dealerNameFilter
       ? dealerNameVal.includes(dealerNameFilter.toLowerCase())
       : true;
@@ -353,7 +353,7 @@ const Reports = () => {
                   {sheetHeaders.map((header, index) => {
                     const colKey = COLUMN_MAPPING[header.id];
                     const formattedValue = item[`${colKey}_formatted`] || "—";
-                    
+
                     return (
                       <div key={header.id} className="flex justify-between items-start">
                         <span className="text-sm font-medium text-slate-500 min-w-[120px] flex-shrink-0">
@@ -376,96 +376,56 @@ const Reports = () => {
 
   // Desktop Table Component with synchronized horizontal scrolling
   const DesktopTableView = ({ items }) => {
-    const [scrollLeft, setScrollLeft] = useState(0);
-    const headerRef = React.useRef(null);
-    const bodyRef = React.useRef(null);
-
-    const handleBodyScroll = (e) => {
-      const scrollLeft = e.target.scrollLeft;
-      setScrollLeft(scrollLeft);
-      if (headerRef.current) {
-        headerRef.current.scrollLeft = scrollLeft;
-      }
-    };
-
-    const handleHeaderScroll = (e) => {
-      const scrollLeft = e.target.scrollLeft;
-      setScrollLeft(scrollLeft);
-      if (bodyRef.current) {
-        bodyRef.current.scrollLeft = scrollLeft;
-      }
-    };
-
     return (
       <div className="overflow-hidden rounded-xl border border-slate-200 shadow-sm bg-white">
-        {/* Fixed Header with horizontal scroll */}
-        <div 
-          ref={headerRef}
-          className="sticky top-0 z-20 bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 overflow-hidden"
-          onScroll={handleHeaderScroll}
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          <div className="min-w-max">
-            <table className="w-full">
-              <thead>
+        <div className="overflow-auto max-h-[calc(100vh-350px)]">
+          <table className="w-full text-left border-collapse">
+            <thead className="sticky top-0 z-20 shadow-sm">
+              <tr>
+                {sheetHeaders.map((header) => (
+                  <th
+                    key={header.id}
+                    className="px-4 py-3 text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap bg-slate-100 border-b border-slate-200"
+                  >
+                    {header.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-200">
+              {items.length === 0 ? (
                 <tr>
-                  {sheetHeaders.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-6 py-4 text-left text-sm font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap min-w-[150px]"
-                    >
-                      {header.label}
-                    </th>
-                  ))}
+                  <td
+                    colSpan={sheetHeaders.length}
+                    className="px-6 py-12 text-center text-slate-500 font-medium"
+                  >
+                    No results found.
+                  </td>
                 </tr>
-              </thead>
-            </table>
-          </div>
-        </div>
+              ) : (
+                items.map((item) => (
+                  <tr
+                    key={item._id}
+                    className="hover:bg-slate-50 transition-colors duration-150"
+                  >
+                    {sheetHeaders.map((header) => {
+                      const colKey = COLUMN_MAPPING[header.id];
+                      const formattedValue = item[`${colKey}_formatted`] || "—";
 
-        {/* Scrollable Body with synchronized horizontal scroll */}
-        <div 
-          ref={bodyRef}
-          className="overflow-auto max-h-[calc(100vh-400px)]"
-          onScroll={handleBodyScroll}
-        >
-          <div className="min-w-max">
-            <table className="w-full">
-              <tbody className="bg-white divide-y divide-slate-200">
-                {items.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={sheetHeaders.length}
-                      className="px-6 py-12 text-center text-slate-500 font-medium"
-                    >
-                      No results found.
-                    </td>
+                      return (
+                        <td
+                          key={header.id}
+                          className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-900"
+                        >
+                          {formattedValue}
+                        </td>
+                      );
+                    })}
                   </tr>
-                ) : (
-                  items.map((item) => (
-                    <tr
-                      key={item._id}
-                      className="hover:bg-slate-50 transition-colors duration-150"
-                    >
-                      {sheetHeaders.map((header) => {
-                        const colKey = COLUMN_MAPPING[header.id];
-                        const formattedValue = item[`${colKey}_formatted`] || "—";
-
-                        return (
-                          <td
-                            key={header.id}
-                            className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900 min-w-[150px]"
-                          >
-                            {formattedValue}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     );

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import supabase from '../SupaabseClient';
 import { MapPin, Loader2, Calendar, User, Navigation, Map, Download, Filter } from "lucide-react";
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const AttendanceHistoryPage = () => {
   const [attendanceData, setAttendanceData] = useState([]);
@@ -158,64 +159,21 @@ const AttendanceHistoryPage = () => {
       doc.text(`User: ${selectedUser || 'All Users'}  |  Total Records: ${data.length}`, 148, 34, { align: 'center' });
 
       const columns = [
-        { header: 'SALES PERSON', key: 'sales_person_name', width: 28 },
-        { header: 'DATE & TIME', key: 'date_and_time', width: 32 },
-        { header: 'END DATE', key: 'end_date', width: 28 },
-        { header: 'STATUS', key: 'status', width: 18 },
-        { header: 'REASON', key: 'reason', width: 25 },
-        { header: 'LATITUDE', key: 'latitude', width: 22 },
-        { header: 'LONGITUDE', key: 'longitude', width: 22 },
-        { header: 'MAP LINK', key: 'map_link', width: 25 },
-        { header: 'ADDRESS', key: 'address', width: 40 }
+        { header: 'SALES PERSON', key: 'sales_person_name', width: 40 },
+        { header: 'DATE & TIME', key: 'date_and_time', width: 50 },
+        { header: 'STATUS', key: 'status', width: 30 },
+        { header: 'ADDRESS', key: 'address', width: 120 }
       ];
 
-      const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
-      const pageWidth = doc.internal.pageSize.width;
-      const margin = (pageWidth - totalTableWidth) / 2;
-      let yPosition = 45;
-      const pageHeight = doc.internal.pageSize.height;
-      const rowHeight = 8;
-
-      // Draw header
-      const drawHeader = (yPos) => {
-        doc.setFillColor(128, 0, 0);
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'bold');
-        let xPos = margin;
-        columns.forEach((column) => {
-          doc.rect(xPos, yPos, column.width, rowHeight, 'F');
-          const tw = doc.getTextWidth(column.header);
-          doc.text(column.header, xPos + (column.width - tw) / 2, yPos + 5);
-          xPos += column.width;
-        });
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(7);
-        doc.setTextColor(0, 0, 0);
+      const cleanTextForPDF = (text) => {
+        if (!text || typeof text !== 'string') return text;
+        // Remove non-ASCII characters and clean up multiple commas left behind
+        return text.replace(/[^\x00-\x7F]/g, '').replace(/,\s*,/g, ',').replace(/\s+,/g, ',').trim();
       };
 
-      drawHeader(yPosition);
-      yPosition += rowHeight;
-
-      data.forEach((record, index) => {
-        if (yPosition > pageHeight - 20) {
-          doc.addPage('landscape');
-          yPosition = 15;
-          drawHeader(yPosition);
-          yPosition += rowHeight;
-        }
-
-        if (index % 2 === 0) {
-          doc.setFillColor(240, 240, 240);
-          let xPos = margin;
-          columns.forEach(col => {
-            doc.rect(xPos, yPosition, col.width, rowHeight, 'F');
-            xPos += col.width;
-          });
-        }
-
-        let xPos = margin;
-        columns.forEach((column) => {
+      const tableHeaders = columns.map(c => c.header);
+      const tableData = data.map(record => {
+        return columns.map(column => {
           let cellValue = record[column.key] || 'N/A';
           if (column.key === 'date_and_time' || column.key === 'end_date') {
             cellValue = formatDateTimeForPDF(cellValue);
@@ -223,15 +181,24 @@ const AttendanceHistoryPage = () => {
           if (column.key === 'map_link' && cellValue !== 'N/A') {
             cellValue = 'View Map';
           }
-          const lines = doc.splitTextToSize(cellValue.toString(), column.width - 4);
-          doc.text(lines, xPos + 2, yPosition + 5);
-          xPos += column.width;
+          return cleanTextForPDF(cellValue.toString());
         });
+      });
 
-        yPosition += rowHeight;
+      autoTable(doc, {
+        startY: 45,
+        head: [tableHeaders],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [128, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        styles: { fontSize: 8, cellPadding: 3, textColor: [0, 0, 0] },
+        alternateRowStyles: { fillColor: [240, 240, 240] },
+        margin: { left: 14, right: 14 }
       });
 
       const totalPages = doc.internal.getNumberOfPages();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
@@ -285,129 +252,54 @@ const AttendanceHistoryPage = () => {
 
       // Define all columns with proper widths that fit in landscape mode
       const columns = [
-        { header: 'SALES PERSON', key: 'sales_person_name', width: 28 },
-        { header: 'DATE & TIME', key: 'date_and_time', width: 32 },
-        { header: 'END DATE', key: 'end_date', width: 28 },
-        { header: 'STATUS', key: 'status', width: 18 },
-        { header: 'REASON', key: 'reason', width: 25 },
-        { header: 'LATITUDE', key: 'latitude', width: 22 },
-        { header: 'LONGITUDE', key: 'longitude', width: 22 },
-        { header: 'MAP LINK', key: 'map_link', width: 25 },
-        { header: 'ADDRESS', key: 'address', width: 40 }
+        { header: 'SALES PERSON', key: 'sales_person_name', width: 40 },
+        { header: 'DATE & TIME', key: 'date_and_time', width: 50 },
+        { header: 'STATUS', key: 'status', width: 30 },
+        { header: 'ADDRESS', key: 'address', width: 120 }
       ];
 
-      // Calculate total table width
-      const totalTableWidth = columns.reduce((sum, col) => sum + col.width, 0);
-      const pageWidth = doc.internal.pageSize.width;
-      const margin = (pageWidth - totalTableWidth) / 2; // Center the table
+      const cleanTextForPDF = (text) => {
+        if (!text || typeof text !== 'string') return text;
+        return text.replace(/[^\x00-\x7F]/g, '').replace(/,\s*,/g, ',').replace(/\s+,/g, ',').trim();
+      };
 
-      // Table configuration
-      let yPosition = 45;
-      const pageHeight = doc.internal.pageSize.height;
-      const rowHeight = 8;
-
-      // Draw table header with better styling
-      doc.setFillColor(128, 0, 0); // Maroon background
-      doc.setTextColor(255, 255, 255); // White text
-      doc.setFontSize(8);
-      doc.setFont(undefined, 'bold');
-
-      let xPosition = margin;
-
-      // Draw header cells
-      columns.forEach((column) => {
-        // Draw header cell background - BLUE for all headers
-        doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
-
-        // Draw header text (centered)
-        const textWidth = doc.getTextWidth(column.header);
-        const textX = xPosition + (column.width - textWidth) / 2;
-        doc.text(column.header, textX, yPosition + 5);
-
-        xPosition += column.width;
-      });
-
-      yPosition += rowHeight;
-
-      // Draw table rows
-      doc.setFont(undefined, 'normal');
-      doc.setFontSize(7);
-      doc.setTextColor(0, 0, 0);
-
-      filteredData.forEach((record, index) => {
-        // Check if we need a new page
-        if (yPosition > pageHeight - 20) {
-          doc.addPage('landscape');
-          yPosition = 15;
-
-          // Redraw headers on new page - BLUE background
-          doc.setFillColor(128, 0, 0);
-          doc.setTextColor(255, 255, 255);
-          doc.setFontSize(8);
-          doc.setFont(undefined, 'bold');
-
-          xPosition = margin;
-          columns.forEach((column) => {
-            // Draw header cell background - BLUE
-            doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
-            const textWidth = doc.getTextWidth(column.header);
-            const textX = xPosition + (column.width - textWidth) / 2;
-            doc.text(column.header, textX, yPosition + 5);
-            xPosition += column.width;
-          });
-
-          yPosition += rowHeight;
-          doc.setFont(undefined, 'normal');
-          doc.setFontSize(7);
-          doc.setTextColor(0, 0, 0);
-        }
-
-        // Alternate row background for better readability
-        if (index % 2 === 0) {
-          doc.setFillColor(240, 240, 240);
-          xPosition = margin;
-          columns.forEach(column => {
-            doc.rect(xPosition, yPosition, column.width, rowHeight, 'F');
-            xPosition += column.width;
-          });
-        }
-
-        // Draw row data
-        xPosition = margin;
-        columns.forEach((column) => {
+      const tableHeaders = columns.map(c => c.header);
+      const tableData = filteredData.map(record => {
+        return columns.map(column => {
           let cellValue = record[column.key] || 'N/A';
-
-          // Format specific fields
           if (column.key === 'date_and_time' || column.key === 'end_date') {
             cellValue = formatDateTimeForPDF(cellValue);
           }
-
           if (column.key === 'map_link' && cellValue !== 'N/A') {
             cellValue = 'View Map';
           }
-
-          // Split text to fit in cell
-          const lines = doc.splitTextToSize(cellValue.toString(), column.width - 4);
-
-          // Draw text
-          doc.text(lines, xPosition + 2, yPosition + 5);
-
-          xPosition += column.width;
+          return cleanTextForPDF(cellValue.toString());
         });
+      });
 
-        yPosition += rowHeight;
+      autoTable(doc, {
+        startY: 45,
+        head: [tableHeaders],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [128, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        styles: { fontSize: 8, cellPadding: 3, textColor: [0, 0, 0] },
+        alternateRowStyles: { fillColor: [240, 240, 240] },
+        margin: { left: 14, right: 14 }
       });
 
       // Add page numbers
       const totalPages = doc.internal.getNumberOfPages();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(100, 100, 100);
         doc.text(
           `Page ${i} of ${totalPages}`,
-          doc.internal.pageSize.width / 2,
-          doc.internal.pageSize.height - 10,
+          pageWidth / 2,
+          pageHeight - 10,
           { align: "center" }
         );
       }
