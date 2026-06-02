@@ -1181,7 +1181,7 @@ function Dashboard() {
             {/* Mobile Target Box */}
             {currentUserTarget !== null && (
               <div className="sm:hidden px-4 py-1.5 rounded-lg shadow-md bg-gradient-to-br from-[#990000] via-[#800000] to-[#660000] flex items-center justify-center min-w-[110px] border border-white/20 mt-1">
-                <span className="text-xs font-bold text-white tracking-wide">Target : {currentUserTarget} Tons</span>
+                <span className="text-xs font-bold text-white tracking-wide">Target : {currentUserTarget} mt</span>
               </div>
             )}
           </div>
@@ -1189,7 +1189,7 @@ function Dashboard() {
             {/* Desktop Target Box */}
             {currentUserTarget !== null && (
               <div className="hidden sm:flex px-5 py-2 sm:py-2.5 rounded-lg shadow-md sm:rounded-xl sm:shadow-lg bg-gradient-to-br from-[#990000] via-[#800000] to-[#660000] items-center justify-center min-w-[140px] border border-white/20">
-                <span className="text-sm sm:text-base font-bold text-white tracking-wide">Target : {currentUserTarget} Tons</span>
+                <span className="text-sm sm:text-base font-bold text-white tracking-wide">Target : {currentUserTarget} mt</span>
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-3 px-4 py-3 border rounded-lg shadow-md bg-white/80 backdrop-blur-sm sm:rounded-xl sm:shadow-lg border-white/20 w-full lg:w-auto">
