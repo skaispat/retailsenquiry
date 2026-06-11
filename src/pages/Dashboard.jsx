@@ -576,7 +576,9 @@ function Dashboard() {
 
     // 3. TOTAL ORDERS COUNT: Use timestamp-filtered data
     const ordersCount = totalFilteredData.filter((row) => {
-      return row.value_of_order && String(row.value_of_order).trim() !== "";
+      const hasOrderQty = row.order_qty && String(row.order_qty).trim() !== "";
+      const hasOrderValue = row.value_of_order && String(row.value_of_order).trim() !== "";
+      return hasOrderQty || hasOrderValue;
     }).length;
     setTotalOrdersCount(ordersCount);
     // console.log("📊 Total orders count:", ordersCount);
@@ -1075,9 +1077,11 @@ function Dashboard() {
           }
         });
       }
-      dataForDialog = tempData.filter(
-        (row) => row.value_of_order && String(row.value_of_order).trim() !== "",
-      );
+      dataForDialog = tempData.filter((row) => {
+        const hasOrderQty = row.order_qty && String(row.order_qty).trim() !== "";
+        const hasOrderValue = row.value_of_order && String(row.value_of_order).trim() !== "";
+        return hasOrderQty || hasOrderValue;
+      });
     } else if (kpiType === "pendingEnquiries") {
       title = "Pending Enquiries";
       let tempData = [...baseData];
