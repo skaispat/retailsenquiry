@@ -71,28 +71,28 @@ export default function TrackerDialog({
   // Define statuses and stages from masterData
   const statuses = masterData
     ? [
-        ...new Set(
-          masterData
-            .filter(
-              (item) =>
-                item.col1 && !["Status", "status", "STATUS"].includes(item.col1)
-            )
-            .map((item) => item.col1)
-        ),
-      ]
+      ...new Set(
+        masterData
+          .filter(
+            (item) =>
+              item.col1 && !["Status", "status", "STATUS"].includes(item.col1)
+          )
+          .map((item) => item.col1)
+      ),
+    ]
     : [];
 
   const stages = masterData
     ? [
-        ...new Set(
-          masterData
-            .filter(
-              (item) =>
-                item.col2 && !["Stage", "stage", "STAGE"].includes(item.col2)
-            )
-            .map((item) => item.col2)
-        ),
-      ]
+      ...new Set(
+        masterData
+          .filter(
+            (item) =>
+              item.col2 && !["Stage", "stage", "STAGE"].includes(item.col2)
+          )
+          .map((item) => item.col2)
+      ),
+    ]
     : [];
 
   // Fetch current location when dialog opens
@@ -134,7 +134,7 @@ export default function TrackerDialog({
       },
       (error) => {
         let errorMessage = "Unable to retrieve your location.";
-        
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage = "Location access denied by user.";
@@ -149,7 +149,7 @@ export default function TrackerDialog({
             errorMessage = "An unknown error occurred.";
             break;
         }
-        
+
         setLocation({
           latitude: null,
           longitude: null,
@@ -159,8 +159,8 @@ export default function TrackerDialog({
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000, 
-        maximumAge: 120000 
+        timeout: 15000,
+        maximumAge: 120000
       }
     );
   };
@@ -169,9 +169,9 @@ export default function TrackerDialog({
   useEffect(() => {
     const fetchSalesPersonNames = async () => {
       if (!isOpen) return;
-      
+
       try {
-        
+
         const { data, error } = await supabase
           .from('master')
           .select('sales_person_name')
@@ -186,8 +186,8 @@ export default function TrackerDialog({
         // Extract unique names and filter out invalid values
         const uniqueNames = [...new Set(data
           .map(item => item.sales_person_name)
-          .filter(name => 
-            name && 
+          .filter(name =>
+            name &&
             name.trim() !== "" &&
             !['Sales Person', 'sales person', 'SALES PERSON', 'Sales Person Name'].includes(name)
           )
@@ -227,9 +227,9 @@ export default function TrackerDialog({
         "Not Interested",
         "Payment Enquiry",
         ...stages.filter(stage => ![
-          "Follow-Up", "Call", "Call Not Picked", "Introductory Call", 
+          "Follow-Up", "Call", "Call Not Picked", "Introductory Call",
           "First Visit",
-          "Order Received", "Order Not Received", "Not Interested", 
+          "Order Received", "Order Not Received", "Not Interested",
           "Payment Enquiry"
         ].includes(stage))
       ];
@@ -240,8 +240,8 @@ export default function TrackerDialog({
    * Get sub-stage options for Site/Engineer Order stages
    */
   const getSubStageOptions = () => {
-    if (entityType === "Site/Engineer" && 
-        (formData.stage === "Order Closed" || formData.stage === "Order Pending")) {
+    if (entityType === "Site/Engineer" &&
+      (formData.stage === "Order Closed" || formData.stage === "Order Pending")) {
       return ["Order Received", "Order Not Received"];
     }
     return [];
@@ -331,10 +331,10 @@ export default function TrackerDialog({
     }
 
     // Define stage visibility based on entity type and selected stage
-    const isOrderStage = formData.stage === "Order Received" || 
-                        (entityType === "Site/Engineer" && formData.stage === "Order Closed");
-    const isOrderNotReceivedStage = formData.stage === "Order Not Received" || 
-                                   (entityType === "Site/Engineer" && formData.stage === "Order Pending");
+    const isOrderStage = formData.stage === "Order Received" ||
+      (entityType === "Site/Engineer" && formData.stage === "Order Closed");
+    const isOrderNotReceivedStage = formData.stage === "Order Not Received" ||
+      (entityType === "Site/Engineer" && formData.stage === "Order Pending");
     const isFollowUpCallStage = [
       "Follow-Up",
       "Call Not Picked",
@@ -348,16 +348,16 @@ export default function TrackerDialog({
     const isSiteEngineerOrderClosed = entityType === "Site/Engineer" && formData.stage === "Order Closed";
 
     setFieldVisibility({
-      showCustomerFeedback: (isFollowUpCallStage || isOrderNotReceivedStage || isSiteEngineerOrderClosed) && 
-                           !["Call Not Picked", "Call not picked"].includes(formData.stage),
+      showCustomerFeedback: (isFollowUpCallStage || isOrderNotReceivedStage || isSiteEngineerOrderClosed) &&
+        !["Call Not Picked", "Call not picked"].includes(formData.stage),
       showNextAction: isFollowUpCallStage || isOrderNotReceivedStage,
       showNextCallDate: false,
       showOrderQty: isOrderStage,
       showOrderedProducts: isOrderStage,
-      showValueOfOrder: (isOrderStage || isOrderNotReceivedStage) && 
-                       formData.stage !== "Order Not Received" && 
-                       formData.stage !== "Order Pending" &&
-                       !isSiteEngineerOrderClosed,
+      showValueOfOrder: (isOrderStage || isOrderNotReceivedStage) &&
+        formData.stage !== "Order Not Received" &&
+        formData.stage !== "Order Pending" &&
+        !isSiteEngineerOrderClosed,
       requireStatus: true,
     });
   }, [formData.stage, entityType]);
@@ -366,7 +366,7 @@ export default function TrackerDialog({
     if (isOpen && dealerData) {
       // Set default sales person name
       const defaultSalesPersonName = isAdmin ? "" : (currentUser?.salesPersonName || "");
-      
+
       setFormData({
         orderQty: "",
         orderedProducts: "",
@@ -470,7 +470,7 @@ export default function TrackerDialog({
       const dealerName = dealerData?.col5 || "";
       const select_value = dealerData?.select_value || "";
       const areaName = dealerData?.supabase_data?.area_name || "";
-      
+
       if (!dealerCode) throw new Error("Dealer code is missing");
 
       const formattedTimestamp = new Date().toISOString();
@@ -481,10 +481,10 @@ export default function TrackerDialog({
         formData.stage === "Not Interested"
           ? notInterestedReason
           : formData.stage === "Payment Enquiry" && paymentCollection === "No"
-          ? whyNotCollection
-          : (entityType === "Site/Engineer" && formData.stage === "Order Closed")
-          ? formData.customerFeedback
-          : formData.customerFeedback;
+            ? whyNotCollection
+            : (entityType === "Site/Engineer" && formData.stage === "Order Closed")
+              ? formData.customerFeedback
+              : formData.customerFeedback;
 
       const nextDateOfCall =
         formData.stage === "Payment Enquiry" && paymentCollection === "No"
@@ -502,7 +502,7 @@ export default function TrackerDialog({
         next_date_of_call: nextDateOfCall || null,
         order_qty: formData.orderQty || null,
         order_products: formData.orderedProducts || null,
-        value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed") 
+        value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed")
           ? null
           : formData.valueOfOrder || null,
         sales_person_name: formData.salesPersonName || currentUser?.salesPersonName || "Unknown",
@@ -531,7 +531,7 @@ export default function TrackerDialog({
         order_qty: formData.orderQty || null,
         next_action: formData.nextAction || null,
         order_products: formData.orderedProducts || null,
-        value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed") 
+        value_of_order: (entityType === "Site/Engineer" && formData.stage === "Order Closed")
           ? null
           : formData.valueOfOrder || null,
         last_date_of_call: new Date(),
@@ -612,7 +612,7 @@ export default function TrackerDialog({
                   </p>
                 </div>
               )}
-              
+
               {/* Location Status */}
               <div className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -838,8 +838,8 @@ export default function TrackerDialog({
               {fieldVisibility.showCustomerFeedback && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {entityType === "Site/Engineer" && formData.stage === "Order Closed" 
-                      ? "Order Details / Customer Feedback" 
+                    {entityType === "Site/Engineer" && formData.stage === "Order Closed"
+                      ? "Order Details / Customer Feedback"
                       : "Customer Feedback"}
                   </label>
                   <textarea
@@ -850,8 +850,8 @@ export default function TrackerDialog({
                     rows={3}
                     required={fieldVisibility.showCustomerFeedback}
                     placeholder={
-                      entityType === "Site/Engineer" && formData.stage === "Order Closed" 
-                        ? "Enter order details and customer feedback..." 
+                      entityType === "Site/Engineer" && formData.stage === "Order Closed"
+                        ? "Enter order details and customer feedback..."
                         : "Enter customer feedback..."
                     }
                   />
@@ -887,53 +887,53 @@ export default function TrackerDialog({
               {(fieldVisibility.showOrderQty ||
                 fieldVisibility.showOrderedProducts ||
                 fieldVisibility.showValueOfOrder) && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {fieldVisibility.showOrderQty && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Order Qty
-                      </label>
-                      <input
-                        type="number"
-                        name="orderQty"
-                        value={formData.orderQty}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border border-gray-300 rounded-md"
-                      />
-                    </div>
-                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {fieldVisibility.showOrderQty && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Order Qty
+                        </label>
+                        <input
+                          type="number"
+                          name="orderQty"
+                          value={formData.orderQty}
+                          onChange={handleInputChange}
+                          className="w-full p-3 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    )}
 
-                  {fieldVisibility.showOrderedProducts && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Ordered Products
-                      </label>
-                      <input
-                        type="text"
-                        name="orderedProducts"
-                        value={formData.orderedProducts}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border border-gray-300 rounded-md"
-                      />
-                    </div>
-                  )}
+                    {fieldVisibility.showOrderedProducts && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Ordered Products
+                        </label>
+                        <input
+                          type="text"
+                          name="orderedProducts"
+                          value={formData.orderedProducts}
+                          onChange={handleInputChange}
+                          className="w-full p-3 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    )}
 
-                  {fieldVisibility.showValueOfOrder && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Value of Order
-                      </label>
-                      <input
-                        type="number"
-                        name="valueOfOrder"
-                        value={formData.valueOfOrder}
-                        onChange={handleInputChange}
-                        className="w-full p-3 border border-gray-300 rounded-md"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
+                    {fieldVisibility.showValueOfOrder && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Value of Order
+                        </label>
+                        <input
+                          type="number"
+                          name="valueOfOrder"
+                          value={formData.valueOfOrder}
+                          onChange={handleInputChange}
+                          className="w-full p-3 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
               <div className="flex justify-end gap-4 pt-6">
                 <button
@@ -1017,9 +1017,8 @@ export default function TrackerDialog({
               </div>
 
               <h2
-                className={`text-2xl font-bold mb-4 ${
-                  modalType === "success" ? "text-green-600" : "text-red-600"
-                }`}
+                className={`text-2xl font-bold mb-4 ${modalType === "success" ? "text-green-600" : "text-red-600"
+                  }`}
               >
                 {modalType === "success" ? "Success!" : "Error!"}
               </h2>
@@ -1030,11 +1029,10 @@ export default function TrackerDialog({
 
               <button
                 onClick={closeModal}
-                className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${
-                  modalType === "success"
-                    ? "bg-green-500 hover:bg-green-600 focus:ring-green-300"
-                    : "bg-red-500 hover:bg-red-600 focus:ring-red-300"
-                }`}
+                className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 ${modalType === "success"
+                  ? "bg-green-500 hover:bg-green-600 focus:ring-green-300"
+                  : "bg-red-500 hover:bg-red-600 focus:ring-red-300"
+                  }`}
               >
                 Ok
               </button>

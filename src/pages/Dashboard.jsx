@@ -1286,7 +1286,7 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                  <Users className="w-5 h-5 text-white sm:h-6 sm:w-6 md:h-8 md:w-8" />
+                  <Users className="w-4 h-4 text-white sm:h-4 sm:w-4 md:h-6 md:w-6" />
                 </div>
               </div>
             </div>
@@ -1307,7 +1307,7 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                  <Store className="w-5 h-5 text-white sm:h-6 sm:w-6 md:h-8 md:w-8" />
+                  <Store className="w-4 h-4 text-white sm:h-4 sm:w-4 md:h-6 md:w-6" />
                 </div>
               </div>
             </div>
@@ -1328,7 +1328,7 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                  <ShoppingBag className="w-5 h-5 text-white sm:h-6 sm:w-6 md:h-8 md:w-8" />
+                  <ShoppingBag className="w-4 h-4 text-white sm:h-4 sm:w-4 md:h-6 md:w-6" />
                 </div>
               </div>
             </div>
@@ -1349,7 +1349,7 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-white sm:h-6 sm:w-6 md:h-8 md:w-8" />
+                  <AlertCircle className="w-4 h-4 text-white sm:h-4 sm:w-4 md:h-6 md:w-6" />
                 </div>
               </div>
             </div>
