@@ -60,7 +60,6 @@ function Sidebar({ userType, username, tabs = [], isMobileOpen, onMobileClose })
       icon: ShoppingCart,
       href: "/orders",
       color: "text-amber-500",
-      adminOnly: true
     },
     {
       label: "Attendance",

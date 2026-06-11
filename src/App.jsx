@@ -162,7 +162,8 @@ const App = () => {
               "Attendance History",
               "Daily Report",
               "User Management",
-              ...(userIsAdmin ? ["Admin Logs", "Orders"] : [])
+              "Orders",
+              ...(userIsAdmin ? ["Admin Logs"] : [])
             ]
             : (data.access || "").split(",").map((t) => t.trim()).filter(Boolean),
         };
@@ -438,7 +439,7 @@ const App = () => {
                       <Route
                         path="/orders"
                         element={
-                          <ProtectedRoute adminOnly={true}>
+                          <ProtectedRoute>
                             <Orders />
                           </ProtectedRoute>
                         }
