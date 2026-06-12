@@ -265,11 +265,19 @@ const Tracker = () => {
 
     } catch (err) {
       console.error("❌ Error fetching data:", err);
-      setError(err.message);
-      toast.error(`Failed to load data: ${err.message}`, {
-        duration: 4000,
-        position: "top-right",
-      });
+      if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
+        setError("Low internet connectivity. Please check your connection and try again.");
+        toast.error("Low internet connectivity. Please check your connection and try again.", {
+          duration: 4000,
+          position: "top-right",
+        });
+      } else {
+        setError(err.message);
+        toast.error(`Failed to load data: ${err.message}`, {
+          duration: 4000,
+          position: "top-right",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

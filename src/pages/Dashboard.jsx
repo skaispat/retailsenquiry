@@ -484,7 +484,13 @@ function Dashboard() {
         }
       } catch (error) {
         console.error("Error fetching data:", error);
-        if (isMounted) setError(`Failed to load data: ${error.message}`);
+        if (isMounted) {
+          if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+            setError("Low internet connectivity. Please check your connection and try again.");
+          } else {
+            setError(`Failed to load data: ${error.message}`);
+          }
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }

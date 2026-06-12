@@ -178,7 +178,11 @@ function Orders() {
       setOrdersData(aggregatedArray);
     } catch (err) {
       console.error("Error fetching orders data:", err);
-      setError(err.message || "Failed to load orders data");
+      if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('Network Error'))) {
+        setError("Low internet connectivity. Please check your connection and try again.");
+      } else {
+        setError(err.message || "Failed to load orders data");
+      }
     } finally {
       setIsLoading(false);
     }

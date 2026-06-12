@@ -562,10 +562,14 @@ export default function TrackerDialog({
         onClose();
       }, 1000);
     } catch (error) {
-      showToast(
-        `Error recording data: ${error.message || "Unknown error"}`,
-        "error"
-      );
+      if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        showToast("Low internet connectivity. Please check your connection and try again.", "error");
+      } else {
+        showToast(
+          `Error recording data: ${error.message || "Unknown error"}`,
+          "error"
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
