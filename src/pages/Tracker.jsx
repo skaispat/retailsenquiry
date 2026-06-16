@@ -15,6 +15,7 @@ const Tracker = () => {
   const [col4Filter, setCol4Filter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCards, setExpandedCards] = useState(new Set());
+  const [salesPersons, setSalesPersons] = useState([]);
 
   // Get user authentication context
   const { currentUser, isAuthenticated } = useContext(AuthContext);
@@ -99,6 +100,26 @@ const Tracker = () => {
       setSheetHeaders(baseHeaders);
     }
   }, [isAdmin]);
+
+  /**
+   * Fetch Sales Persons for Admin Filter
+   */
+  const fetchSalesPersons = async () => {
+    if (!isAdmin) return;
+    try {
+      const { data, error } = await supabase
+        .from('master')
+        .select('sales_person_name')
+        .eq('status', true)
+        .eq('position', 'Area Sales Manager')
+        .order('sales_person_name');
+      
+      if (error) throw error;
+      setSalesPersons(data || []);
+    } catch (err) {
+      console.error("❌ Error fetching sales persons:", err);
+    }
+  };
 
   /**
    * Fetch FMS data from Supabase
@@ -324,6 +345,7 @@ const Tracker = () => {
   useEffect(() => {
     if (isAuthenticated && currentUser) {
       fetchTrackerData();
+      fetchSalesPersons();
     } else if (!isAuthenticated) {
       setIsLoading(false);
       setError("Please log in to view this data.");
@@ -511,8 +533,8 @@ const Tracker = () => {
 
             {/* Content Section */}
             <div className="w-full">
-              {/* Search Bar - Inside content area */}
-              <div className="p-4 sm:px-6 sm:py-4 bg-slate-50/50">
+              {/* Search and Filter Section */}
+              <div className="p-4 sm:px-6 sm:py-4 bg-slate-50/50 flex flex-col md:flex-row gap-4">
                 <div className="relative w-full md:max-w-md">
                   <SearchIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
                   <input
@@ -523,6 +545,24 @@ const Tracker = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+
+                {isAdmin && (
+                  <div className="w-full md:max-w-xs relative">
+                    <select
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-slate-700 font-medium appearance-none"
+                      value={col4Filter}
+                      onChange={(e) => setCol4Filter(e.target.value)}
+                    >
+                      <option value="">All Sales Persons</option>
+                      {salesPersons.map((person, index) => (
+                        <option key={index} value={person.sales_person_name}>
+                          {person.sales_person_name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                  </div>
+                )}
               </div>
               {/* Desktop Table View (hidden on mobile) */}
               <div className="hidden lg:block">

@@ -25,6 +25,7 @@ const DailyReport = lazy(() => import("./pages/Dailyreport"));
 const AdminLogs = lazy(() => import("./pages/AdminLogs"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 const Orders = lazy(() => import("./pages/Orders"));
+const Dispatch = lazy(() => import("./pages/Dispatch"));
 const AttendanceHistoryPage = lazy(() => import("./pages/AttendanceHistoryPage"));
 
 export const AuthContext = createContext(null);
@@ -163,6 +164,7 @@ const App = () => {
               "Daily Report",
               "User Management",
               "Orders",
+              "Dispatch",
               ...(userIsAdmin ? ["Admin Logs"] : [])
             ]
             : (data.access || "").split(",").map((t) => t.trim()).filter(Boolean),
@@ -441,6 +443,14 @@ const App = () => {
                         element={
                           <ProtectedRoute>
                             <Orders />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/dispatch"
+                        element={
+                          <ProtectedRoute>
+                            <Dispatch />
                           </ProtectedRoute>
                         }
                       />

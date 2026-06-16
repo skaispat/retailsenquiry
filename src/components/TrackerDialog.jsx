@@ -165,33 +165,25 @@ export default function TrackerDialog({
     );
   };
 
-  // Fetch sales person names from master table
+  // Fetch sales person names
   useEffect(() => {
     const fetchSalesPersonNames = async () => {
       if (!isOpen) return;
 
       try {
-
         const { data, error } = await supabase
           .from('master')
           .select('sales_person_name')
-          .not('sales_person_name', 'is', null)
-          .not('sales_person_name', 'eq', '')
+          .eq('status', true)
+          .eq('position', 'Area Sales Manager')
           .order('sales_person_name');
 
         if (error) {
           throw error;
         }
 
-        // Extract unique names and filter out invalid values
-        const uniqueNames = [...new Set(data
-          .map(item => item.sales_person_name)
-          .filter(name =>
-            name &&
-            name.trim() !== "" &&
-            !['Sales Person', 'sales person', 'SALES PERSON', 'Sales Person Name'].includes(name)
-          )
-        )];
+        // Extract unique names
+        const uniqueNames = [...new Set(data.map(item => item.sales_person_name).filter(Boolean))];
 
         setSalesPersonNames(uniqueNames);
 
@@ -581,35 +573,35 @@ export default function TrackerDialog({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-          <div className="sticky top-0 bg-white/90 backdrop-blur-md px-8 py-6 border-b border-slate-200 flex items-start justify-between">
-            <div>
-              <h2 className="text-3xl font-bold text-slate-800">
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+          <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200 flex items-start justify-between shadow-sm">
+            <div className="w-full">
+              <h2 className="text-xl sm:text-3xl font-bold text-slate-800 pr-8 sm:pr-0">
                 Record Dealer Interaction
               </h2>
               {dealerData && (
-                <div className="flex items-center gap-x-6 mt-2">
-                  <p className="text-lg text-slate-600">
-                    Dealer Code:{" "}
+                <div className="grid grid-cols-2 sm:flex sm:flex-row sm:flex-wrap gap-x-2 gap-y-1 sm:gap-x-6 mt-3 sm:mt-2">
+                  <p className="text-sm sm:text-lg text-slate-600 truncate" title="Dealer Code">
+                    Code:{" "}
                     <span className="font-semibold text-green-600">
                       {dealerData.col1}
                     </span>
                   </p>
-                  <p className="text-lg text-slate-600">
-                    Entity Type:{" "}
+                  <p className="text-sm sm:text-lg text-slate-600 truncate" title="Entity Type">
+                    Type:{" "}
                     <span className="font-semibold text-blue-600">
                       {entityType}
                     </span>
                   </p>
-                  <p className="text-lg text-slate-600">
-                    Area Name:{" "}
+                  <p className="text-sm sm:text-lg text-slate-600 truncate" title="Area Name">
+                    Area:{" "}
                     <span className="font-semibold text-purple-600">
                       {dealerData.supabase_data?.area_name || "N/A"}
                     </span>
                   </p>
-                  <p className="text-lg text-slate-600">
-                    Last Call Date:{" "}
+                  <p className="text-sm sm:text-lg text-slate-600 truncate" title="Last Call Date">
+                    Last Call:{" "}
                     <span className="font-semibold text-blue-600">
                       {formatDateToDDMMYYYY(dealerData.col17)}
                     </span>
@@ -618,7 +610,7 @@ export default function TrackerDialog({
               )}
 
               {/* Location Status */}
-              <div className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <div className="mt-3 sm:mt-4 bg-slate-50 p-2 sm:p-3 rounded-xl border border-slate-100">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <span className="text-sm font-semibold text-slate-700">
                     Location Status:
@@ -660,11 +652,11 @@ export default function TrackerDialog({
             </div>
             <button
               onClick={onClose}
-              className="text-slate-500 hover:text-slate-700 transition-colors"
+              className="absolute top-4 right-4 sm:relative sm:top-0 sm:right-0 text-slate-400 hover:text-slate-700 bg-slate-100 sm:bg-transparent hover:bg-slate-200 p-1.5 sm:p-0 rounded-full transition-colors flex-shrink-0"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
+                className="h-5 w-5 sm:h-6 sm:w-6"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -679,9 +671,9 @@ export default function TrackerDialog({
             </button>
           </div>
 
-          <div className="p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-4 sm:p-8">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Status
@@ -891,7 +883,7 @@ export default function TrackerDialog({
               {(fieldVisibility.showOrderQty ||
                 fieldVisibility.showOrderedProducts ||
                 fieldVisibility.showValueOfOrder) && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                     {fieldVisibility.showOrderQty && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -939,32 +931,32 @@ export default function TrackerDialog({
                   </div>
                 )}
 
-              <div className="flex justify-end gap-4 pt-6">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 pt-6 border-t border-slate-100 mt-4 sm:mt-6">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-md"
+                  className="w-full sm:w-auto px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold order-2 sm:order-1 transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel
                 </button>
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-col w-full sm:w-auto sm:items-end gap-2 order-1 sm:order-2">
                   <button
                     type="submit"
-                    className="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
+                    className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2"
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? (
-                      <span className="flex items-center gap-2">
+                      <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Recording...
-                      </span>
+                        <span>Recording...</span>
+                      </>
                     ) : (
                       "Record Interaction"
                     )}
                   </button>
                   {(!location.latitude || !location.longitude) && !isSubmitting && !location.isLoading && (
-                    <p className="text-xs text-amber-600 font-medium italic">
+                    <p className="text-[11px] sm:text-xs text-amber-600 font-medium italic text-center sm:text-right mt-1 sm:mt-0">
                       * Location not available. You can still submit.
                     </p>
                   )}

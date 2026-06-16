@@ -27,9 +27,9 @@ class ErrorBoundary extends Component {
             <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-6">
               <AlertTriangle className="h-8 w-8 text-red-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Oops! Something went wrong.</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Internet connectivity is low.</h1>
             <p className="text-gray-600 mb-6">
-              We're sorry, but the application encountered an unexpected error. Please try refreshing the page.
+              Please check your internet connection and try refreshing the page.
             </p>
             <button
               onClick={() => window.location.reload()}
@@ -37,12 +37,7 @@ class ErrorBoundary extends Component {
             >
               Refresh Page
             </button>
-            {process.env.NODE_ENV !== 'production' && this.state.error && (
-              <div className="mt-8 text-left bg-gray-50 p-4 rounded-lg overflow-auto max-h-60 border border-gray-200">
-                <p className="text-sm font-semibold text-red-600 mb-2">{this.state.error.toString()}</p>
-                <pre className="text-xs text-gray-700 whitespace-pre-wrap">{this.state.errorInfo?.componentStack}</pre>
-              </div>
-            )}
+
           </div>
         </div>
       );

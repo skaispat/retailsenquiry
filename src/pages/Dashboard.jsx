@@ -16,12 +16,14 @@ function Dashboard() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [allFMSData, setAllFMSData] = useState([]);
+  const [allTrackingData, setAllTrackingData] = useState([]);
   const [error, setError] = useState(null);
 
   const [totalCount, setTotalCount] = useState(0);
   const [activeDealersCount, setActiveDealersCount] = useState(0);
   const [totalOrdersCount, setTotalOrdersCount] = useState(0);
   const [pendingEnquiriesCount, setPendingEnquiriesCount] = useState(0);
+  const [newDealersCount, setNewDealersCount] = useState(0);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -384,6 +386,34 @@ function Dashboard() {
           }
         }
 
+        // Fetch tracking_history data
+        let allTrackingFetchedData = [];
+        let fromTracking = 0;
+        let hasMoreTracking = true;
+
+        while (hasMoreTracking && isMounted && allTrackingFetchedData.length < MAX_RECORDS) {
+          const { data: trackingData, error: trackingError } = await supabase
+            .from("tracking_history")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .range(fromTracking, fromTracking + step - 1);
+
+          if (trackingError) {
+            console.error("Error fetching tracking_history:", trackingError);
+            hasMoreTracking = false;
+          }
+
+          if (trackingData && trackingData.length > 0) {
+            allTrackingFetchedData = [...allTrackingFetchedData, ...trackingData];
+            fromTracking += step;
+            if (trackingData.length < step) {
+              hasMoreTracking = false;
+            }
+          } else {
+            hasMoreTracking = false;
+          }
+        }
+
         if (!isMounted) return;
         const data = allFetchedData;
 
@@ -482,6 +512,34 @@ function Dashboard() {
             setError("No data found in the FMS table.");
           }
         }
+
+        // Process tracking history
+        if (allTrackingFetchedData && allTrackingFetchedData.length > 0) {
+          const currentUserNormalizedName = normalizeName(currentUserSalesPersonName);
+          const allTrackingRows = allTrackingFetchedData.map((row) => ({
+            ...row,
+            dealer_name: row.deler_distributer_site_name,
+            order_quantity: row.order_qty,
+            last_order_before: row.created_at ? formatDate(row.created_at) : null,
+            timestamp_raw: row.created_at,
+            sales_person_name_normalized: normalizeName(row.sales_person_name),
+          }));
+
+          let filteredTrackingRows = allTrackingRows;
+          if (!isAdmin) {
+            filteredTrackingRows = allTrackingRows.filter(
+              (row) => row.sales_person_name_normalized === currentUserNormalizedName
+            );
+          }
+
+          if (isMounted) {
+            setAllTrackingData(filteredTrackingRows);
+          }
+        } else {
+          if (isMounted) {
+            setAllTrackingData([]);
+          }
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
         if (isMounted) {
@@ -517,6 +575,7 @@ function Dashboard() {
       setActiveDealersCount(0);
       setTotalOrdersCount(0);
       setPendingEnquiriesCount(0);
+      setNewDealersCount(0);
       return;
     }
 
@@ -580,8 +639,51 @@ function Dashboard() {
     //   totalFilteredData.length,
     // );
 
-    // 3. TOTAL ORDERS COUNT: Use timestamp-filtered data
-    const ordersCount = totalFilteredData.filter((row) => {
+    // 3. TOTAL ORDERS COUNT: Use tracking history data (ONLY CURRENT MONTH)
+    let trackingDataForCounts = [...allTrackingData];
+    if (isAdmin && selectedSalesperson && selectedSalesperson !== "All Salespersons") {
+      const selectedSalespersonNormalized = normalizeName(selectedSalesperson);
+      trackingDataForCounts = trackingDataForCounts.filter(
+        (row) => row.sales_person_name_normalized === selectedSalespersonNormalized
+      );
+    }
+
+    let totalFilteredTrackingData = [...trackingDataForCounts];
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      totalFilteredTrackingData = totalFilteredTrackingData.filter((row) => {
+        const timestampToUse = row.timestamp_raw || row.created_at;
+        if (!timestampToUse) return false;
+        try {
+          let rowDate = new Date(timestampToUse);
+          if (isNaN(rowDate.getTime())) return false;
+          return rowDate >= start && rowDate <= end;
+        } catch (error) {
+          return false;
+        }
+      });
+    } else {
+      const currentMonthNum = new Date().getMonth();
+      const currentYearNum = new Date().getFullYear();
+
+      totalFilteredTrackingData = totalFilteredTrackingData.filter((row) => {
+        const timestampToUse = row.timestamp_raw || row.created_at;
+        if (!timestampToUse) return false;
+        try {
+          let rowDate = new Date(timestampToUse);
+          if (isNaN(rowDate.getTime())) return false;
+          return rowDate.getMonth() === currentMonthNum && rowDate.getFullYear() === currentYearNum;
+        } catch (error) {
+          return false;
+        }
+      });
+    }
+
+    const ordersCount = totalFilteredTrackingData.filter((row) => {
       const hasOrderQty = row.order_qty && String(row.order_qty).trim() !== "";
       const hasOrderValue = row.value_of_order && String(row.value_of_order).trim() !== "";
       return hasOrderQty || hasOrderValue;
@@ -748,6 +850,39 @@ function Dashboard() {
 
     setActiveDealersCount(activeDealersCount);
 
+    // 6. NEW DEALERS OF CURRENT MONTH
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const dealerFirstSeen = new Map();
+
+    dataForCounts.forEach(row => {
+      const code = row.dealer_code;
+      if (!code || typeof code !== 'string' || code.trim() === '') return;
+
+      const dateRaw = row.timestamp_raw || row.timestamp || row.created_at;
+      if (!dateRaw) return;
+
+      try {
+        let rowDate = new Date(dateRaw);
+        if (isNaN(rowDate.getTime())) return;
+
+        if (!dealerFirstSeen.has(code) || rowDate < dealerFirstSeen.get(code)) {
+          dealerFirstSeen.set(code, rowDate);
+        }
+      } catch (e) { }
+    });
+
+    let newDealersThisMonth = 0;
+    dealerFirstSeen.forEach((firstDate) => {
+      if (firstDate.getMonth() === currentMonth && firstDate.getFullYear() === currentYear) {
+        newDealersThisMonth++;
+      }
+    });
+
+    setNewDealersCount(newDealersThisMonth);
+
     // console.log("\n📈 ========== FINAL COUNTS SUMMARY ==========");
     // console.log("📊 Total Records:", totalFilteredData.length);
     // console.log("📊 Active Dealers:", activeDealersCount);
@@ -756,7 +891,7 @@ function Dashboard() {
     // console.log(
     //   "📝 Active dealers: stage='Order Received' + last_date_of_call date filter",
     // );
-  }, [allFMSData, startDate, endDate, isAdmin, selectedSalesperson]);
+  }, [allFMSData, allTrackingData, startDate, endDate, isAdmin, selectedSalesperson]);
 
   const handleSetTargetClick = async () => {
     setIsSetTargetDialogOpen(true);
@@ -1044,7 +1179,7 @@ function Dashboard() {
 
       // console.log("📋 Active dealers dialog data count:", dataForDialog.length);
     } else if (kpiType === "totalOrders") {
-      title = "Total Orders";
+      title = "Monthly Orders";
       const totalOrdersColumnsOrder = [
         "dealer_name",
         "sales_person_name",
@@ -1055,29 +1190,41 @@ function Dashboard() {
         .map((columnKey) => FMS_COLUMNS_INFO[columnKey])
         .filter(Boolean);
 
-      let tempData = [...baseData];
+      let tempData = [...allTrackingData];
+      if (isAdmin && selectedSalesperson && selectedSalesperson !== "All Salespersons") {
+        const selectedSalespersonNormalized = normalizeName(selectedSalesperson);
+        tempData = tempData.filter(
+          (row) => row.sales_person_name_normalized === selectedSalespersonNormalized
+        );
+      }
+
       if (startDate && endDate) {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
         tempData = tempData.filter((row) => {
-          const timestampToUse = row.timestamp_raw || row.timestamp;
+          const timestampToUse = row.timestamp_raw || row.created_at;
           if (!timestampToUse) return false;
           try {
-            let rowDate;
-            if (typeof timestampToUse === "string") {
-              let isoTimestamp = timestampToUse.trim();
-              if (isoTimestamp.includes(" "))
-                isoTimestamp = isoTimestamp.replace(" ", "T");
-              if (isoTimestamp.match(/[+-]\d{2}$/))
-                isoTimestamp = isoTimestamp + ":00";
-              rowDate = new Date(isoTimestamp);
-            } else {
-              rowDate = new Date(timestampToUse);
-            }
+            let rowDate = new Date(timestampToUse);
             if (isNaN(rowDate.getTime())) return false;
             return rowDate >= start && rowDate <= end;
+          } catch (error) {
+            return false;
+          }
+        });
+      } else {
+        const currentMonthNum = new Date().getMonth();
+        const currentYearNum = new Date().getFullYear();
+
+        tempData = tempData.filter((row) => {
+          const timestampToUse = row.timestamp_raw || row.created_at;
+          if (!timestampToUse) return false;
+          try {
+            let rowDate = new Date(timestampToUse);
+            if (isNaN(rowDate.getTime())) return false;
+            return rowDate.getMonth() === currentMonthNum && rowDate.getFullYear() === currentYearNum;
           } catch (error) {
             return false;
           }
@@ -1311,6 +1458,9 @@ function Dashboard() {
                   <div className="mb-1 text-xl font-bold text-white sm:text-2xl md:text-3xl">
                     {activeDealersCount}
                   </div>
+                  <div className="text-[0.65rem] xs:text-xs font-medium text-red-100/90 mt-1">
+                    + {newDealersCount} new dealer added
+                  </div>
                 </div>
                 <div className="bg-white/20 p-1.5 sm:p-3 rounded-md sm:rounded-lg">
                   <Store className="w-4 h-4 text-white sm:h-4 sm:w-4 md:h-6 md:w-6" />
@@ -1327,7 +1477,7 @@ function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-[0.65rem] xs:text-xs sm:text-sm font-semibold text-red-100 uppercase tracking-wider mb-1">
-                    Total Orders
+                    Monthly Orders
                   </h3>
                   <div className="mb-1 text-xl font-bold text-white sm:text-2xl md:text-3xl">
                     {totalOrdersCount.toLocaleString()}

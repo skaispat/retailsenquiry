@@ -15,7 +15,8 @@ import {
   Clock,
   FileText,
   Users,
-  ShoppingCart
+  ShoppingCart,
+  Truck
 } from "lucide-react";
 import { AuthContext } from "../App";
 import logo from '../../public/logo.jpeg';
@@ -60,6 +61,12 @@ function Sidebar({ userType, username, tabs = [], isMobileOpen, onMobileClose })
       icon: ShoppingCart,
       href: "/orders",
       color: "text-amber-500",
+    },
+    {
+      label: "Dispatch",
+      icon: Truck,
+      href: "/dispatch",
+      color: "text-amber-600",
     },
     {
       label: "Attendance",

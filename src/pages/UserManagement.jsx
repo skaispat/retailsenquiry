@@ -50,6 +50,7 @@ const UserManagement = () => {
     "Daily Report",
     "Admin Logs",
     "Orders",
+    "Dispatch",
     "User Management"
   ];
 
@@ -177,18 +178,27 @@ const UserManagement = () => {
 
         showNotification("User updated successfully!", "success");
       } else {
-        // Create new user
+        // Determine if we need to manually provide an ID due to sequence out-of-sync issues
+        const payload = {
+          user_name: formData.user_name,
+          sales_person_name: formData.sales_person_name, // Corrected column name
+          password: formData.password,
+          role: formData.role,
+          position: formData.position,
+          access: accessString,
+          created_at: new Date().toISOString()
+        };
+
+        if (users.length > 0 && typeof users[0].id === 'number') {
+          const maxId = Math.max(...users.map(u => u.id));
+          payload.id = maxId + 1;
+        } else if (users.length > 0 && typeof users[0].id === 'string' && users[0].id.length > 20) {
+          payload.id = crypto.randomUUID();
+        }
+
         const { data, error } = await supabase
           .from('master')
-          .insert([{
-            user_name: formData.user_name,
-            sales_person_name: formData.sales_person_name, // Corrected column name
-            password: formData.password,
-            role: formData.role,
-            position: formData.position,
-            access: accessString,
-            created_at: new Date().toISOString()
-          }])
+          .insert([payload])
           .select();
 
         if (error) {

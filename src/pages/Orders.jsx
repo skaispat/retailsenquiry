@@ -289,7 +289,7 @@ function Orders() {
                         Target {isAdmin() && <span className="text-red-200 ml-1">({totalTargetSum.toLocaleString(undefined, { maximumFractionDigits: 2 }) + " mt"})</span>}
                       </div>
                     </th>
-                    <th className="p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-right">
+                    <th className="p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-center">
                       Total Order Qty {isAdmin() && <span className="text-red-200 ml-1">({totalOrderSum.toLocaleString(undefined, { maximumFractionDigits: 2 }) + " mt"})</span>}
                     </th>
                   </tr>
@@ -310,7 +310,7 @@ function Orders() {
                         <td className="p-4 text-sm sm:text-base text-gray-600 whitespace-nowrap">
                           {row.target !== "Not Set" ? `${row.target} Tons` : "Not Set"}
                         </td>
-                        <td className="p-4 text-sm sm:text-base font-bold text-[#800000] text-right whitespace-nowrap">
+                        <td className="p-4 text-sm sm:text-base font-bold text-[#800000] text-center whitespace-nowrap">
                           {row.total_qty.toLocaleString(undefined, { maximumFractionDigits: 2 })} Tons
                         </td>
                       </tr>
@@ -352,17 +352,17 @@ function Orders() {
                     <th className="p-4 font-semibold text-sm sm:text-base whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4" />
-                        Dealer/Site
+                        Dealer/Distributer Name
                       </div>
                     </th>
-                    <th className="p-4 font-semibold text-sm sm:text-base whitespace-nowrap">
+                    {/* <th className="p-4 font-semibold text-sm sm:text-base whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4" />
                         Products
                       </div>
-                    </th>
+                    </th> */}
 
-                    <th className="p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-right">
+                    <th className="p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-center">
                       Order Qty
                     </th>
                   </tr>
@@ -385,11 +385,11 @@ function Orders() {
                         <td className="p-4 text-sm sm:text-base text-gray-600">
                           {row.deler_distributer_site_name || '-'}
                         </td>
-                        <td className="p-4 text-sm sm:text-base text-gray-600">
+                        {/* <td className="p-4 text-sm sm:text-base text-gray-600">
                           {row.order_products || '-'}
-                        </td>
+                        </td> */}
 
-                        <td className="p-4 text-sm sm:text-base font-bold text-[#800000] text-right whitespace-nowrap">
+                        <td className="p-4 text-sm sm:text-base font-bold text-[#800000] text-center whitespace-nowrap">
                           {row.order_qty}
                         </td>
                       </tr>
