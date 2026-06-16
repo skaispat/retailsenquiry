@@ -30,6 +30,7 @@ const UserManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active");
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -186,6 +187,7 @@ const UserManagement = () => {
           role: formData.role,
           position: formData.position,
           access: accessString,
+          status: true,
           created_at: new Date().toISOString()
         };
 
@@ -254,13 +256,35 @@ const UserManagement = () => {
     setShowDeleteModal(true);
   };
 
+  const handleToggleStatus = async (user) => {
+    const newStatus = user.status === false ? true : false;
+    try {
+      const { error } = await supabase
+        .from('master')
+        .update({ status: newStatus })
+        .eq('sales_person_name', user.sales_person_name);
+
+      if (error) throw error;
+
+      showNotification(`User ${newStatus ? 'activated' : 'deactivated'} successfully!`, "success");
+      fetchUsers();
+    } catch (error) {
+      console.error("Error updating user status:", error);
+      showNotification("Failed to update status", "error");
+    }
+  };
+
   // Filter users based on search, role filter, and position filter
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.sales_person_name?.toLowerCase().includes(searchTerm.toLowerCase()); // Corrected column name
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     const matchesPosition = positionFilter === "all" || user.position === positionFilter;
-    return matchesSearch && matchesRole && matchesPosition;
+    
+    const isActive = user.status !== false; // true or null is considered active
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? isActive : !isActive);
+    
+    return matchesSearch && matchesRole && matchesPosition && matchesStatus;
   });
 
   const getRoleColor = (role) => {
@@ -326,10 +350,26 @@ const UserManagement = () => {
 
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-1 text-sm text-gray-500">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mr-2 ${user.status !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            {user.status !== false ? 'Active' : 'Inactive'}
+          </span>
           <Calendar className="w-3 h-3" />
           {new Date(user.created_at).toLocaleDateString()}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleToggleStatus(user)}
+            title={user.status !== false ? "Deactivate User" : "Activate User"}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${user.status !== false ? 'bg-[#800000]' : 'bg-gray-200'}`}
+            role="switch"
+            aria-checked={user.status !== false}
+          >
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${user.status !== false ? 'translate-x-4' : 'translate-x-0'}`}
+            />
+          </button>
           <button
             onClick={() => handleEdit(user)}
             className="text-[#800000] hover:text-[#660000] transition-colors p-1"
@@ -400,6 +440,22 @@ const UserManagement = () => {
                 ))}
               </Select>
             </div>
+
+            {/* Status Toggle */}
+            <div className="flex bg-gray-100 p-1 rounded-lg w-full sm:w-48 shrink-0">
+              <button 
+                onClick={() => setStatusFilter('active')}
+                className={`flex-1 px-2 py-1 rounded-md text-sm font-medium transition-colors ${statusFilter === 'active' ? 'bg-white text-[#800000] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Active
+              </button>
+              <button 
+                onClick={() => setStatusFilter('inactive')}
+                className={`flex-1 px-2 py-1 rounded-md text-sm font-medium transition-colors ${statusFilter === 'inactive' ? 'bg-white text-[#800000] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Inactive
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-3">
@@ -455,6 +511,9 @@ const UserManagement = () => {
                         Access Pages
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Created
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -503,6 +562,11 @@ const UserManagement = () => {
                             )}
                           </div>
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.status !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {user.status !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
@@ -511,6 +575,19 @@ const UserManagement = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStatus(user)}
+                              title={user.status !== false ? "Deactivate User" : "Activate User"}
+                              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${user.status !== false ? 'bg-[#800000]' : 'bg-gray-200'}`}
+                              role="switch"
+                              aria-checked={user.status !== false}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${user.status !== false ? 'translate-x-4' : 'translate-x-0'}`}
+                              />
+                            </button>
                             <button
                               onClick={() => handleEdit(user)}
                               className="text-[#800000] hover:text-[#660000] transition-colors p-1"

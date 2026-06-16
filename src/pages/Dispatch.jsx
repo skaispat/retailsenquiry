@@ -9,7 +9,8 @@ import {
   Package,
   ClipboardCheck,
   History,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import supabase from '../SupaabseClient';
 import { AuthContext } from '../App';
@@ -25,6 +26,7 @@ function Dispatch() {
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -137,13 +139,29 @@ function Dispatch() {
     fetchData();
   }, []);
 
-  const filteredPendingOrders = selectedMonth
-    ? pendingOrders.filter(row => row.monthKey === selectedMonth)
-    : pendingOrders;
+  const filteredPendingOrders = pendingOrders.filter(row => {
+    const matchesMonth = selectedMonth ? row.monthKey === selectedMonth : true;
+    const matchesSearch = searchQuery === '' ||
+      String(row.displayDate || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.sales_person_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.deler_distributer_site_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.numericOrderQty || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.pendingQty || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesMonth && matchesSearch;
+  });
 
-  const filteredDispatchHistory = selectedMonth
-    ? dispatchHistory.filter(row => row.monthKey === selectedMonth)
-    : dispatchHistory;
+  const filteredDispatchHistory = dispatchHistory.filter(row => {
+    const matchesMonth = selectedMonth ? row.monthKey === selectedMonth : true;
+    const dateString = row.dispatch_date ? new Date(row.dispatch_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+    const matchesSearch = searchQuery === '' ||
+      String(dateString).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.sales_person_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.dealer_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.order_qty || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.dispatch_qty || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(row.pending_qty || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesMonth && matchesSearch;
+  });
 
   const handleProcessClick = (order) => {
     setSelectedOrder(order);
@@ -239,8 +257,8 @@ function Dispatch() {
     <div className="min-h-screen p-3 bg-gradient-to-br from-slate-50 via-red-50 to-rose-50 sm:p-6">
       <div className="mx-auto space-y-4 max-w-7xl sm:space-y-6">
         {/* Header */}
-        <div className="flex flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
-          <div className="space-y-1 sm:space-y-2 flex-1 min-w-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1 sm:space-y-2 flex-1 min-w-0 w-full sm:w-auto">
             <h1 className="text-lg font-bold text-transparent sm:text-2xl md:text-3xl bg-gradient-to-r from-[#800000] via-[#a30000] to-[#cc0000] bg-clip-text flex items-center gap-2 sm:gap-3">
               <Truck className="w-6 h-6 sm:w-10 sm:h-10 text-[#800000] shrink-0" />
               <span className="truncate">Monthly Dispatch</span>
@@ -249,9 +267,22 @@ function Dispatch() {
               Process dispatches and view history
             </p>
           </div>
-          <div className="flex items-center flex-shrink-0 mt-1 sm:mt-0">
+          <div className="flex flex-row items-center gap-2 w-full sm:w-auto">
+            {/* Search Filter */}
+            <div className="flex-1 sm:flex-none relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400 group-focus-within:text-[#800000] transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search dispatch..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] transition-all bg-white/80 backdrop-blur-sm shadow-sm"
+              />
+            </div>
             {/* Month Filter */}
-            <div className="flex items-center gap-1 sm:gap-2 bg-white px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-[#800000]">
+            <div className="flex items-center gap-1 sm:gap-2 bg-white px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-[#800000] flex-shrink-0">
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-[#800000] shrink-0" />
               <input
                 type="month"

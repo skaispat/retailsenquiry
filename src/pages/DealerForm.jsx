@@ -518,7 +518,9 @@ function DealerForm() {
       const { data, error } = await supabase
         .from('master')
         .select('sales_person_name')
-        .not('sales_person_name', 'is', null);
+        .not('sales_person_name', 'is', null)
+        .eq('status', true)
+        .eq('position', 'Area Sales Manager');
 
 
       if (error) throw error;
