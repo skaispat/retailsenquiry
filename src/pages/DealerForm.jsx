@@ -60,6 +60,7 @@ function DealerForm() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState('environment');
 
   // Access currentUser and userRole from AuthContext
   const { currentUser, isAuthenticated } = useContext(AuthContext);
@@ -263,10 +264,15 @@ function DealerForm() {
   /**
    * Start camera for photo capture - FIXED
    */
-  const startCamera = async () => {
+  const startCamera = async (mode = cameraFacingMode) => {
     try {
       setCameraError("");
       setIsCameraLoading(true);
+      setIsCameraOpen(true); // Open modal first to render video element
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
 
       // Check if camera is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -278,7 +284,7 @@ function DealerForm() {
       // Request camera access
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'environment', // Prefer rear camera
+          facingMode: mode, // Prefer rear camera by default
           width: { ideal: 1280 },
           height: { ideal: 720 }
         },
@@ -286,24 +292,8 @@ function DealerForm() {
       });
 
       setCameraStream(stream);
-      setIsCameraOpen(true);
-
-      // Wait for video to be ready
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-
-        // Wait for video to load
-        await new Promise((resolve) => {
-          if (videoRef.current) {
-            videoRef.current.onloadedmetadata = () => {
-              resolve();
-            };
-          }
-        });
-
-        // Play the video
-        await videoRef.current.play();
-      }
+      setCameraFacingMode(mode);
+      setIsCameraLoading(false);
 
     } catch (error) {
       console.error("Camera error:", error);
@@ -314,9 +304,16 @@ function DealerForm() {
       } else {
         setCameraError("Unable to access camera. Please check permissions.");
       }
-    } finally {
       setIsCameraLoading(false);
     }
+  };
+
+  /**
+   * Switch between front and rear cameras
+   */
+  const switchCamera = () => {
+    const newMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    startCamera(newMode);
   };
 
   /**
@@ -399,7 +396,7 @@ function DealerForm() {
 
       // Upload file to Supabase storage
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('image')
+        .from('images')
         .upload(filePath, file);
 
       if (uploadError) {
@@ -410,7 +407,7 @@ function DealerForm() {
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from('image')
+        .from('images')
         .getPublicUrl(filePath);
 
       // console.log("Public URL generated:", publicUrl);
@@ -594,6 +591,18 @@ function DealerForm() {
       }
     };
   }, [cameraStream, photoPreview]);
+
+  // Attach stream to video element when camera opens
+  useEffect(() => {
+    if (isCameraOpen && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.onloadedmetadata = () => {
+        if (videoRef.current) {
+          videoRef.current.play().catch(e => console.error("Error playing video:", e));
+        }
+      };
+    }
+  }, [isCameraOpen, cameraStream]);
 
   /**
    * Handles changes to form input fields.
@@ -1365,64 +1374,72 @@ function DealerForm() {
 
       {/* Camera Modal - FIXED */}
       {isCameraOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-gray-800">Take Photo</h3>
+        <div className="fixed inset-0 bg-black z-[100] flex flex-col md:p-4">
+          <div className="bg-black md:bg-white md:rounded-2xl md:shadow-2xl max-w-2xl w-full mx-auto flex flex-col h-full md:h-auto overflow-hidden">
+            <div className="p-4 md:p-6 flex justify-between items-center bg-black md:bg-transparent text-white md:text-gray-800 z-10 absolute md:relative top-0 left-0 right-0">
+              <h3 className="text-xl font-bold">Take Photo</h3>
+              <button
+                onClick={stopCamera}
+                className="text-white md:text-gray-500 hover:text-gray-300 md:hover:text-gray-700 bg-black/50 md:bg-transparent p-2 rounded-full"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            {cameraError ? (
+              <div className="text-center py-8 px-4 flex-1 flex flex-col justify-center bg-white md:bg-transparent h-full">
+                <p className="text-red-500 mb-4">{cameraError}</p>
                 <button
                   onClick={stopCamera}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 self-center"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
+                  Close
                 </button>
               </div>
+            ) : (
+              <div className="flex-1 flex flex-col relative h-full">
+                <div className="relative bg-black flex-1 flex items-center justify-center overflow-hidden w-full h-full min-h-[60vh] md:min-h-[400px]">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover absolute inset-0"
+                  />
+                  <canvas ref={canvasRef} className="hidden" />
+                </div>
 
-              {cameraError ? (
-                <div className="text-center py-8">
-                  <p className="text-red-500 mb-4">{cameraError}</p>
+                <div className="p-6 md:p-6 bg-black md:bg-transparent absolute md:relative bottom-0 left-0 right-0 flex justify-center items-center gap-6 pb-12 md:pb-6 z-10 bg-gradient-to-t from-black/80 to-transparent md:bg-none">
+                  <button
+                    onClick={switchCamera}
+                    className="flex md:hidden w-12 h-12 bg-gray-800/80 hover:bg-gray-700 text-white rounded-full items-center justify-center backdrop-blur-sm transition-all duration-200 border border-gray-600"
+                    title="Switch Camera"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                  </button>
+
+                  <button
+                    onClick={capturePhoto}
+                    className="w-20 h-20 md:w-auto md:h-auto md:px-8 md:py-3 bg-white md:bg-green-500 hover:bg-gray-200 md:hover:bg-green-600 text-green-500 md:text-white font-medium rounded-full md:rounded-lg shadow-lg transition-all duration-200 flex items-center justify-center md:gap-2 border-4 border-gray-300 md:border-none mx-2 md:mx-0"
+                  >
+                    <svg className="w-10 h-10 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" fill="currentColor" />
+                    </svg>
+                    <span className="hidden md:inline">Capture Photo</span>
+                  </button>
                   <button
                     onClick={stopCamera}
-                    className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    className="hidden md:flex px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 items-center justify-center"
                   >
-                    Close
+                    Cancel
                   </button>
                 </div>
-              ) : (
-                <>
-                  <div className="relative bg-black rounded-lg overflow-hidden mb-4">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-96 object-cover"
-                    />
-                    <canvas ref={canvasRef} className="hidden" />
-                  </div>
-
-                  <div className="flex justify-center gap-4">
-                    <button
-                      onClick={capturePhoto}
-                      className="px-8 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200 flex items-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="10" fill="currentColor" />
-                      </svg>
-                      Capture Photo
-                    </button>
-                    <button
-                      onClick={stopCamera}
-                      className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-lg shadow-sm transition-all duration-200"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

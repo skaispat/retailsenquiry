@@ -113,7 +113,7 @@ const Tracker = () => {
         .eq('status', true)
         .eq('position', 'Area Sales Manager')
         .order('sales_person_name');
-      
+
       if (error) throw error;
       setSalesPersons(data || []);
     } catch (err) {
